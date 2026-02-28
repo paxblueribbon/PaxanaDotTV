@@ -90,7 +90,7 @@ app.listen(HTTP_PORT, () => {
 
 VLC command:
   vlc <file> \\
-    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${STREAM_KEY}}' \\
+    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${STREAM_KEY}}' \\
     --loop
 
 `);
