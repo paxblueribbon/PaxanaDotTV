@@ -2,6 +2,7 @@ const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const ffmpegPath = require('ffmpeg-static');
 
 const HTTP_PORT = process.env.PORT || 3000;
 const RTMP_PORT = 1935;
@@ -29,7 +30,7 @@ const nms = new NodeMediaServer({
     mediaroot: MEDIA_ROOT,
   },
   trans: {
-    ffmpeg: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
+    ffmpeg: process.env.FFMPEG_PATH || ffmpegPath,
     tasks: [
       {
         app: 'live',
