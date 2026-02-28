@@ -177,9 +177,10 @@
       }
 
       hls = new Hls({
-        liveSyncDurationCount: 4,
-        liveMaxLatencyDurationCount: 10,
-        maxBufferLength: 30,
+        liveSyncDurationCount: 5,
+        liveMaxLatencyDurationCount: 12,
+        maxBufferLength: 60,
+        backBufferLength: 30,
         lowLatencyMode: false,
         xhrSetup(xhr) {
           xhr.setRequestHeader('Cache-Control', 'no-cache');
@@ -193,7 +194,10 @@
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
           destroyHls();
           setWaiting('Stream interrupted – reconnecting…');
           setTimeout(startPolling, RETRY_MS);
