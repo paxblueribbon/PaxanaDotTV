@@ -177,10 +177,8 @@
       }
 
       hls = new Hls({
-        liveSyncDurationCount: 4,
-        liveMaxLatencyDurationCount: 10,
-        maxBufferLength: 40,
-        maxBufferSize: 60 * 1000 * 1000,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 6,
         lowLatencyMode: false,
         xhrSetup(xhr) {
           xhr.setRequestHeader('Cache-Control', 'no-cache');
