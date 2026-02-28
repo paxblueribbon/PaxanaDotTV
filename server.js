@@ -1,0 +1,96 @@
+const NodeMediaServer = require('node-media-server');
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+
+const HTTP_PORT = process.env.PORT || 3000;
+const RTMP_PORT = 1935;
+const STREAM_KEY = process.env.STREAM_KEY || 'live';
+const MEDIA_ROOT = path.join(__dirname, 'media');
+
+// Ensure media directory exists
+if (!fs.existsSync(MEDIA_ROOT)) {
+  fs.mkdirSync(MEDIA_ROOT, { recursive: true });
+}
+
+// ── RTMP / HLS server ────────────────────────────────────────────────────────
+const nms = new NodeMediaServer({
+  rtmp: {
+    port: RTMP_PORT,
+    chunk_size: 60000,
+    gop_cache: true,
+    ping: 30,
+    ping_timeout: 60,
+  },
+  http: {
+    // node-media-server's own HTTP is disabled; Express handles everything
+    port: 8888,
+    allow_origin: '*',
+    mediaroot: MEDIA_ROOT,
+  },
+  trans: {
+    ffmpeg: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
+    tasks: [
+      {
+        app: 'live',
+        hls: true,
+        hlsFlags: '[hls_time=2:hls_list_size=6:hls_flags=delete_segments]',
+        hlsKeep: false,
+        dash: false,
+      },
+    ],
+  },
+});
+
+nms.run();
+
+nms.on('prePublish', (id, streamPath, args) => {
+  console.log(`[RTMP] Stream started: ${streamPath}`);
+});
+
+nms.on('donePublish', (id, streamPath, args) => {
+  console.log(`[RTMP] Stream ended: ${streamPath}`);
+});
+
+// ── Express (viewer frontend + HLS files) ────────────────────────────────────
+const app = express();
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve HLS segments from the media root
+app.use('/hls', express.static(MEDIA_ROOT, {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.m3u8')) {
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Cache-Control', 'no-cache, no-store');
+    } else if (filePath.endsWith('.ts')) {
+      res.setHeader('Content-Type', 'video/mp2t');
+    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
+}));
+
+// Stream status endpoint
+app.get('/status', (req, res) => {
+  const playlistPath = path.join(MEDIA_ROOT, 'live', STREAM_KEY, 'index.m3u8');
+  const live = fs.existsSync(playlistPath);
+  res.json({ live, streamKey: STREAM_KEY });
+});
+
+app.listen(HTTP_PORT, () => {
+  console.log(`
+┌──────────────────────────────────────────────────────┐
+│              Paxana.TV  –  on the air                │
+├──────────────────────────────────────────────────────┤
+│  Viewer URL : http://localhost:${HTTP_PORT}                  │
+│  RTMP ingest: rtmp://localhost/live/${STREAM_KEY}           │
+│  HLS output : /hls/live/${STREAM_KEY}/index.m3u8           │
+└──────────────────────────────────────────────────────┘
+
+VLC command:
+  vlc <file> \\
+    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${STREAM_KEY}}' \\
+    --loop
+
+`);
+});

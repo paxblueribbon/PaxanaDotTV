@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paxana.TV</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 1.25rem;
+    }
+
+    header {
+      font-size: 1.1rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #888;
+    }
+
+    header span {
+      color: #fff;
+    }
+
+    #stage {
+      position: relative;
+      width: min(900px, 96vw);
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 1px solid #222;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      display: block;
+      /* Remove all browser-default controls */
+      pointer-events: none;
+    }
+
+    /* Hide any controls the browser might render */
+    video::-webkit-media-controls { display: none !important; }
+    video::-webkit-media-controls-enclosure { display: none !important; }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      background: rgba(0,0,0,0.7);
+      transition: opacity 0.4s;
+    }
+
+    #overlay.hidden { display: none; }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b30;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    #status-text {
+      font-size: 0.85rem;
+      color: #888;
+      letter-spacing: 0.1em;
+    }
+
+    #live-badge {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #fff;
+      background: rgba(255,59,48,0.85);
+      padding: 3px 8px 3px 6px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+
+    #live-badge.visible { opacity: 1; }
+
+    #live-badge .dot {
+      width: 6px;
+      height: 6px;
+      background: #fff;
+    }
+
+    footer {
+      font-size: 0.7rem;
+      color: #444;
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+
+  <header><span>Paxana</span>.TV</header>
+
+  <div id="stage">
+    <video id="player" autoplay muted playsinline></video>
+
+    <div id="live-badge">
+      <div class="dot"></div>
+      live
+    </div>
+
+    <div id="overlay">
+      <div class="dot"></div>
+      <div id="status-text">Waiting for stream…</div>
+    </div>
+  </div>
+
+  <footer>tune in. sit back. enjoy.</footer>
+
+  <script>
+    const player    = document.getElementById('player');
+    const overlay   = document.getElementById('overlay');
+    const statusTxt = document.getElementById('status-text');
+    const liveBadge = document.getElementById('live-badge');
+
+    const HLS_URL   = '/hls/live/live/index.m3u8';
+    const POLL_MS   = 4000;   // how often to check if stream is up
+    const RETRY_MS  = 5000;   // how long to wait before re-attaching on error
+
+    let hls = null;
+    let polling = null;
+
+    function setWaiting(msg) {
+      overlay.classList.remove('hidden');
+      liveBadge.classList.remove('visible');
+      statusTxt.textContent = msg || 'Waiting for stream…';
+    }
+
+    function setLive() {
+      overlay.classList.add('hidden');
+      liveBadge.classList.add('visible');
+    }
+
+    function destroyHls() {
+      if (hls) { hls.destroy(); hls = null; }
+    }
+
+    function attachHls() {
+      destroyHls();
+
+      if (!Hls.isSupported()) {
+        // Safari native HLS
+        player.src = HLS_URL;
+        player.play().catch(() => {});
+        setLive();
+        return;
+      }
+
+      hls = new Hls({
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 6,
+        lowLatencyMode: false,
+        xhrSetup(xhr) {
+          xhr.setRequestHeader('Cache-Control', 'no-cache');
+        },
+      });
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        player.play().catch(() => {});
+        setLive();
+        stopPolling();
+      });
+
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          destroyHls();
+          setWaiting('Stream interrupted – reconnecting…');
+          setTimeout(startPolling, RETRY_MS);
+        }
+      });
+
+      hls.loadSource(HLS_URL);
+      hls.attachMedia(player);
+    }
+
+    async function checkStream() {
+      try {
+        const res  = await fetch('/status');
+        const data = await res.json();
+        if (data.live) {
+          stopPolling();
+          attachHls();
+        }
+      } catch (_) {
+        // network error – keep polling
+      }
+    }
+
+    function startPolling() {
+      if (polling) return;
+      setWaiting('Waiting for stream…');
+      checkStream();
+      polling = setInterval(checkStream, POLL_MS);
+    }
+
+    function stopPolling() {
+      if (polling) { clearInterval(polling); polling = null; }
+    }
+
+    // Unmute once the user interacts (browser autoplay policy)
+    document.addEventListener('click', () => { player.muted = false; }, { once: true });
+
+    startPolling();
+  </script>
+</body>
+</html>
