@@ -35,7 +35,7 @@ const nms = new NodeMediaServer({
       {
         app: 'live',
         hls: true,
-        hlsFlags: '[hls_time=2:hls_list_size=6:hls_flags=delete_segments]',
+        hlsFlags: '[hls_time=4:hls_list_size=8:hls_flags=delete_segments]',
         hlsKeep: false,
         dash: false,
       },
