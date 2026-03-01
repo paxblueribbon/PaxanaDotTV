@@ -7,7 +7,7 @@ import MegaPlayer from './components/MegaPlayer'
 import UploadModal from './components/UploadModal'
 
 export default function App() {
-  const [section, setSection] = useState('live')
+  const [section, setSection] = useState('movies')
   const [activeKey, setActiveKey] = useState(null)
   const [activeMovie, setActiveMovie] = useState(null)
   const [activeShow, setActiveShow] = useState(null)
