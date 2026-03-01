@@ -2,16 +2,24 @@ const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
-const { promisify } = require('util');
 const multer = require('multer');
+const { Storage } = require('megajs');
 const ffmpegPath = require('ffmpeg-static');
 
-const execAsync = promisify(exec);
-
-// Remote MEGA folder for uploaded movies (override with MEGA_FOLDER env var)
-const MEGA_FOLDER = (process.env.MEGA_FOLDER || '/Movies').replace(/['"\\`]/g, '');
+// MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
+const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
 const MOVIES_JSON = path.join(__dirname, 'public', 'movies.json');
+
+// Lazily-initialised MEGA storage session (cached for the process lifetime)
+let _megaStorage = null;
+async function getMegaStorage() {
+  if (_megaStorage) return _megaStorage;
+  const email    = process.env.MEGA_EMAIL;
+  const password = process.env.MEGA_PASSWORD;
+  if (!email || !password) throw new Error('Set MEGA_EMAIL and MEGA_PASSWORD env vars');
+  _megaStorage = await new Storage({ email, password }).ready;
+  return _megaStorage;
+}
 
 const uploadStorage = multer.diskStorage({
   destination: '/tmp',
@@ -130,28 +138,35 @@ app.get('/status/:channel', (req, res) => {
 //   genre      – genre string
 //   poster_url – URL to poster image
 //
-// Requires MEGAcmd installed and authenticated on the host (`mega-login` once).
+// Requires MEGA_EMAIL and MEGA_PASSWORD env vars.
 app.post('/api/movies', upload.single('file'), async (req, res) => {
   const { title, director, year, genre, poster_url } = req.body;
 
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
   if (!title)    return res.status(400).json({ error: 'Title is required' });
 
-  const uploadPath  = req.file.path;                          // e.g. /tmp/1234567890.mp4
-  const remotePath  = `${MEGA_FOLDER}/${req.file.filename}`;  // e.g. /Movies/1234567890.mp4
+  const uploadPath = req.file.path;
 
   try {
-    // Ensure remote folder exists (ignore error if it already does)
-    try { await execAsync(`mega-mkdir -p "${MEGA_FOLDER}"`); } catch (_) {}
+    const storage = await getMegaStorage();
 
-    // Upload file to MEGA
-    await execAsync(`mega-put "${uploadPath}" "${MEGA_FOLDER}/"`);
+    // Find or create the uploads folder under root
+    let folder = (storage.root.children || []).find(
+      f => f.directory && f.name === MEGA_FOLDER_NAME
+    );
+    if (!folder) folder = await storage.root.mkdir(MEGA_FOLDER_NAME);
 
-    // Create public export link – output like:
-    //   Exported /Movies/1234.mp4: https://mega.nz/file/ABC123#key
-    const { stdout } = await execAsync(`mega-export -a "${remotePath}"`);
-    const match = stdout.match(/https?:\/\/mega\.nz\/file\/([^\s]+)/);
-    if (!match) throw new Error(`Unexpected mega-export output: ${stdout.trim()}`);
+    // Stream the file to MEGA
+    const { size } = fs.statSync(uploadPath);
+    const megaFile = await folder.upload(
+      { name: req.file.filename, size },
+      fs.createReadStream(uploadPath)
+    ).complete;
+
+    // Get public share link → 'https://mega.nz/file/ID#key'
+    const url   = await megaFile.link();
+    const match = url.match(/mega\.nz\/(?:file|#!)\/([^\s]+)/);
+    if (!match) throw new Error(`Unexpected MEGA link format: ${url}`);
     const embedUrl = match[1]; // "ID#key"
 
     // Read existing movies.json (or start fresh)
@@ -179,6 +194,8 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
 
     res.json({ success: true, movie });
   } catch (err) {
+    // Reset cached session so the next request gets a fresh one
+    _megaStorage = null;
     res.status(500).json({ error: err.message });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
