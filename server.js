@@ -135,7 +135,12 @@ const RTMP_PORT = 1935;
 const MEDIA_ROOT = path.join(__dirname, 'media');
 
 // Tracks which stream keys are currently publishing
-const activeStreams = new Set();
+const activeStreams   = new Set();
+// Pending removal timers, cancelled if the stream reconnects within the grace period.
+// VLC briefly drops the RTMP connection between playlist items during --loop transitions;
+// without this, the channel flickers offline and any watching player navigates away.
+const streamEndTimers = new Map();
+const STREAM_END_GRACE_MS = 15_000;
 
 // Ensure media directory exists
 if (!fs.existsSync(MEDIA_ROOT)) {
@@ -184,14 +189,24 @@ nms.run();
 
 nms.on('prePublish', (id, streamPath, args) => {
   const key = streamPath.split('/').pop();
+  // Cancel any pending removal — stream reconnected (e.g. VLC looping between episodes)
+  if (streamEndTimers.has(key)) {
+    clearTimeout(streamEndTimers.get(key));
+    streamEndTimers.delete(key);
+  }
   activeStreams.add(key);
   console.log(`[RTMP] Stream started: ${streamPath}`);
 });
 
 nms.on('donePublish', (id, streamPath, args) => {
   const key = streamPath.split('/').pop();
-  activeStreams.delete(key);
-  console.log(`[RTMP] Stream ended: ${streamPath}`);
+  console.log(`[RTMP] Stream dropped: ${streamPath} — waiting ${STREAM_END_GRACE_MS / 1000}s before marking offline`);
+  const timer = setTimeout(() => {
+    activeStreams.delete(key);
+    streamEndTimers.delete(key);
+    console.log(`[RTMP] Stream confirmed ended: ${streamPath}`);
+  }, STREAM_END_GRACE_MS);
+  streamEndTimers.set(key, timer);
 });
 
 // ── Express (viewer frontend + HLS files) ────────────────────────────────────

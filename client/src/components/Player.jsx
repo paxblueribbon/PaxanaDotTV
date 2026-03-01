@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import Hls from 'hls.js'
 
-const POLL_MS = 4000
+const POLL_MS      = 4000
+const MAX_RETRIES  = 5
+const RETRY_DELAY  = 2000  // ms between network-error retries
 
 export default function Player({ channelKey, onBack }) {
-  const videoRef   = useRef(null)
-  const hlsRef     = useRef(null)
-  const pollingRef = useRef(null)
-  const mountedRef = useRef(true)
+  const videoRef      = useRef(null)
+  const hlsRef        = useRef(null)
+  const pollingRef    = useRef(null)
+  const retryTimerRef = useRef(null)
+  const mountedRef    = useRef(true)
+  const retriesRef    = useRef(0)
   const [status, setStatus] = useState('connecting') // 'connecting' | 'live' | 'interrupted' | 'ended'
 
   function safeSetStatus(s) {
@@ -15,6 +19,7 @@ export default function Player({ channelKey, onBack }) {
   }
 
   function destroyHls() {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null }
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
   }
 
@@ -24,6 +29,7 @@ export default function Player({ channelKey, onBack }) {
 
   function attachHls() {
     destroyHls()
+    retriesRef.current = 0
     safeSetStatus('connecting')
 
     const video  = videoRef.current
@@ -38,11 +44,11 @@ export default function Player({ channelKey, onBack }) {
     }
 
     const hls = new Hls({
-      liveSyncDurationCount:    5,
-      liveMaxLatencyDurationCount: 12,
-      maxBufferLength:          60,
-      backBufferLength:         30,
-      lowLatencyMode:           false,
+      liveSyncDurationCount:       3,
+      liveMaxLatencyDurationCount: 10,
+      maxBufferLength:             60,
+      backBufferLength:            30,
+      lowLatencyMode:              false,
       xhrSetup(xhr) {
         xhr.setRequestHeader('Cache-Control', 'no-cache')
       },
@@ -51,6 +57,7 @@ export default function Player({ channelKey, onBack }) {
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       if (!mountedRef.current) return
+      retriesRef.current = 0
       video.play().catch(() => {})
       safeSetStatus('live')
       stopPolling()
@@ -58,13 +65,28 @@ export default function Player({ channelKey, onBack }) {
 
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal || !mountedRef.current) return
+
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
         hls.recoverMediaError()
-      } else {
-        destroyHls()
-        safeSetStatus('interrupted')
-        startPolling()
+        return
       }
+
+      // For network errors (missing segments, brief gaps), retry before giving up
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retriesRef.current < MAX_RETRIES) {
+        retriesRef.current++
+        retryTimerRef.current = setTimeout(() => {
+          if (hlsRef.current) hlsRef.current.startLoad()
+        }, RETRY_DELAY)
+        return
+      }
+
+      // Exhausted retries — fall back to polling, with a delay to prevent rapid cycling
+      retriesRef.current = 0
+      destroyHls()
+      safeSetStatus('interrupted')
+      retryTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) startPolling()
+      }, RETRY_DELAY)
     })
 
     hls.loadSource(hlsUrl)
