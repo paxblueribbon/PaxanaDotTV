@@ -509,7 +509,7 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
     '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'veryfast',
     '-x264opts', 'keyint=120:min-keyint=120:scenecut=0',
     '-vf', 'fps=30',
-    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-f', 'flv', rtmpUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
