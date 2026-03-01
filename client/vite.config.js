@@ -6,10 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/channels': 'http://localhost:3000',
-      '/status':   'http://localhost:3000',
-      '/hls':      'http://localhost:3000',
-      '/api':      'http://localhost:3000',
+      '/channels':    'http://localhost:3000',
+      '/status':      'http://localhost:3000',
+      '/hls':         'http://localhost:3000',
+      '/api':         'http://localhost:3000',
+      '/movies.json': 'http://localhost:3000',
+      '/tv.json':     'http://localhost:3000',
     },
   },
   build: {

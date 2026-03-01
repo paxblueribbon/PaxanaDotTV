@@ -6,3 +6,5 @@ client/public/movies.json
 client/public/tv.json
 *.log
 .env
+# Runtime data — movies.json is auto-generated; tv.json can be committed
+data/movies.json

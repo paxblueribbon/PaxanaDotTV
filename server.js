@@ -8,7 +8,24 @@ const ffmpegPath = require('ffmpeg-static');
 
 // MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
 const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
-const MOVIES_JSON = path.join(__dirname, 'public', 'movies.json');
+
+// Runtime data lives in data/ so it survives Vite rebuilds that wipe public/
+const DATA_DIR   = path.join(__dirname, 'data');
+const MOVIES_JSON = path.join(DATA_DIR, 'movies.json');
+const TV_JSON     = path.join(DATA_DIR, 'tv.json');
+
+// Ensure data/ exists
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// One-time migration: move JSON files from old public/ location to data/
+for (const name of ['movies.json', 'tv.json']) {
+  const oldPath = path.join(__dirname, 'public', name);
+  const newPath = path.join(DATA_DIR, name);
+  if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
+    fs.copyFileSync(oldPath, newPath);
+    console.log(`[data] Migrated ${name} from public/ → data/`);
+  }
+}
 
 // Lazily-initialised MEGA storage session (cached for the process lifetime)
 let _megaStorage = null;
@@ -98,6 +115,20 @@ nms.on('donePublish', (id, streamPath, args) => {
 const app = express();
 
 app.use(express.json());
+
+// Serve runtime JSON data from data/ (survives Vite rebuilds)
+function serveJson(filePath, fallback) {
+  return (_req, res) => {
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.json(fallback);
+    }
+  };
+}
+app.get('/movies.json', serveJson(MOVIES_JSON, { movies: [] }));
+app.get('/tv.json',     serveJson(TV_JSON,     { shows:  [] }));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve HLS segments from the media root
@@ -156,12 +187,16 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
     );
     if (!folder) folder = await storage.root.mkdir(MEGA_FOLDER_NAME);
 
-    // Stream the file to MEGA
+    // Stream the file to MEGA; name it after the movie title
+    const ext      = path.extname(req.file.filename);
+    const safeName = title.trim().replace(/[^\w\s.()\-]/g, '').replace(/\s+/g, '_') + ext;
     const { size } = fs.statSync(uploadPath);
     const megaFile = await folder.upload(
-      { name: req.file.filename, size },
+      { name: safeName, size },
       fs.createReadStream(uploadPath)
     ).complete;
+
+    console.log(`[MEGA] Uploaded: ${MEGA_FOLDER_NAME}/${safeName}`);
 
     // Get public share link → 'https://mega.nz/file/ID#key'
     const url   = await megaFile.link();
