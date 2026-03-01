@@ -68,7 +68,11 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
               type="text"
               placeholder="https://mega.nz/file/… or ID#key"
               value={megaUrl}
-              onChange={e => setMegaUrl(e.target.value)}
+              onChange={e => {
+                const val = e.target.value
+                const m = val.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/)
+                setMegaUrl(m ? m[1] : val)
+              }}
               disabled={busy}
               autoFocus
               autoComplete="off"
