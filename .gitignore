@@ -2,5 +2,7 @@ node_modules/
 client/node_modules/
 media/
 /public/
+client/public/movies.json
+client/public/tv.json
 *.log
 .env
