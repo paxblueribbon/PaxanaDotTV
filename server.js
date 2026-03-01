@@ -511,11 +511,7 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
     return res.status(500).json({ error: `VLC not found at "${vlcPath}". Check your VLC_PATH setting.` });
   }
 
-  const sout    = [
-    '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128',
-    'venc=x264{keyint=120,min-keyint=120,scenecut=0}}',
-    `:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${key}}`,
-  ].join(',');
+  const sout = `#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${key}}`;
 
   const proc = spawn(vlcPath, [
     '--intf', 'dummy',
