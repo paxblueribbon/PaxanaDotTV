@@ -192,3 +192,135 @@ footer {
   color: #444;
   letter-spacing: 0.1em;
 }
+
+/* ── Section nav ── */
+#section-nav {
+  display: flex;
+  gap: 0;
+  border: 1px solid #222;
+}
+
+#section-nav button {
+  background: none;
+  border: none;
+  border-right: 1px solid #222;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 0.4rem 1.2rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+#section-nav button:last-child { border-right: none; }
+#section-nav button:hover { color: #ccc; background: #111; }
+#section-nav button.active { color: #fff; background: #181818; }
+
+/* ── Media grid view ── */
+#media-grid-view {
+  width: min(900px, 96vw);
+}
+
+#media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.media-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.poster-wrap {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: #111;
+  border: 1px solid #222;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.media-card:hover .poster-wrap { border-color: #555; }
+
+.poster-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.2s;
+}
+
+.media-card:hover .poster-wrap img { opacity: 0.85; }
+
+.media-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.media-title {
+  font-size: 0.75rem;
+  color: #ccc;
+  line-height: 1.3;
+}
+
+.media-year {
+  font-size: 0.65rem;
+  color: #555;
+  letter-spacing: 0.05em;
+}
+
+#no-media {
+  color: #444;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+/* ── MEGA player view ── */
+#mega-player-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+#mega-stage {
+  position: relative;
+  width: min(900px, 96vw);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid #222;
+}
+
+#mega-stage iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: none;
+}
+
+#mega-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: min(900px, 96vw);
+}
+
+#mega-title {
+  font-size: 0.9rem;
+  color: #ddd;
+}
+
+#mega-sub {
+  font-size: 0.7rem;
+  color: #555;
+  letter-spacing: 0.05em;
+}

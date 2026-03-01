@@ -1,6 +1,6 @@
 node_modules/
 client/node_modules/
 media/
-public/
+/public/
 *.log
 .env
