@@ -51,27 +51,88 @@ header span { color: #fff; }
   padding: 0.75rem 1rem;
   background: #111;
   border: 1px solid #222;
-  cursor: pointer;
+  cursor: default;
   transition: border-color 0.2s, background 0.2s;
 }
 
-.channel-item:hover {
-  background: #181818;
-  border-color: #444;
+.channel-item:hover { background: #181818; border-color: #333; }
+.channel-item.offline { opacity: 0.55; }
+.channel-item.offline:hover { opacity: 1; }
+
+/* live/offline indicator dot */
+.ch-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.ch-dot.live {
+  background: #ff3b30;
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
-.channel-item .channel-key {
+.channel-key {
   font-size: 0.9rem;
   color: #ddd;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.channel-item .watch-label {
+.ch-meta {
+  font-size: 0.62rem;
+  color: #444;
+  letter-spacing: 0.05em;
+}
+
+/* right-side actions */
+.ch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.watch-label {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #555;
+  cursor: pointer;
+  transition: color 0.2s;
 }
+.watch-label:hover { color: #ccc; }
+
+.stop-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.stop-btn:hover { color: #ccc; border-color: #555; }
+
+.launch-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+.channel-item:hover .launch-btn { color: #aaa; }
+.launch-btn:disabled { color: #333; cursor: default; }
 
 #no-channels {
   color: #444;
@@ -79,6 +140,11 @@ header span { color: #fff; }
   letter-spacing: 0.1em;
   padding: 2rem 0;
   text-align: center;
+}
+
+#no-channels code {
+  font-family: inherit;
+  color: #555;
 }
 
 /* ── Player view ── */

@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 const multer = require('multer');
 const { Storage } = require('megajs');
 const ffmpegPath = require('ffmpeg-static');
@@ -38,6 +39,40 @@ function requireAuth(req, res, next) {
 
 // MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
 const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
+
+// ── Show streaming ─────────────────────────────────────────────────────────────
+const SHOWS_DIR  = path.join(__dirname, 'shows');
+const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.wmv', '.flv', '.ts']);
+
+if (!fs.existsSync(SHOWS_DIR)) fs.mkdirSync(SHOWS_DIR, { recursive: true });
+
+// Running VLC child processes, keyed by channel key
+const vlcProcesses = new Map();
+
+function showNameToKey(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function getShowFolders() {
+  return fs.readdirSync(SHOWS_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name);
+}
+
+function getVideoFiles(showDir) {
+  return fs.readdirSync(showDir)
+    .filter(f => VIDEO_EXTS.has(path.extname(f).toLowerCase()))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+// Creates playlist.m3u in the show folder if one doesn't already exist.
+// Always regenerates so newly added episodes are picked up on next launch.
+function buildPlaylist(showDir, videoFiles) {
+  const playlistPath = path.join(showDir, 'playlist.m3u');
+  const lines = ['#EXTM3U', ...videoFiles.map(f => path.join(showDir, f))];
+  fs.writeFileSync(playlistPath, lines.join('\n') + '\n', 'utf8');
+  return playlistPath;
+}
 
 // ── TMDB helper ───────────────────────────────────────────────────────────────
 function tmdbGet(apiPath) {
@@ -420,6 +455,76 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
   }
+});
+
+// ── Show channel management ────────────────────────────────────────────────────
+// GET /api/show-channels — list all show folders with live status
+app.get('/api/show-channels', (req, res) => {
+  try {
+    const channels = getShowFolders().map(name => {
+      const key      = showNameToKey(name);
+      const showDir  = path.join(SHOWS_DIR, name);
+      const videos   = getVideoFiles(showDir);
+      return { name, key, live: activeStreams.has(key), episodeCount: videos.length };
+    });
+    res.json({ channels });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/show-channels/:key/launch — build playlist and start VLC
+app.post('/api/show-channels/:key/launch', (req, res) => {
+  const { key } = req.params;
+
+  if (vlcProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
+
+  const name = getShowFolders().find(n => showNameToKey(n) === key);
+  if (!name) return res.status(404).json({ error: 'Show folder not found' });
+
+  const showDir = path.join(SHOWS_DIR, name);
+  const videos  = getVideoFiles(showDir);
+  if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
+
+  const playlistPath = buildPlaylist(showDir, videos);
+
+  const vlcPath = process.env.VLC_PATH || 'vlc';
+  const sout    = [
+    '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128',
+    'venc=x264{keyint=120,min-keyint=120,scenecut=0}}',
+    `:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${key}}`,
+  ].join(',');
+
+  const proc = spawn(vlcPath, [
+    '--intf', 'dummy',
+    playlistPath,
+    '--sout', sout,
+    '--sout-keep',
+    '--loop',
+  ], { stdio: 'ignore' });
+
+  proc.on('error', err => {
+    console.error(`[VLC] Failed to start "${name}":`, err.message);
+    vlcProcesses.delete(key);
+  });
+  proc.on('exit', (code, signal) => {
+    console.log(`[VLC] "${name}" exited (code=${code} signal=${signal})`);
+    vlcProcesses.delete(key);
+  });
+
+  vlcProcesses.set(key, proc);
+  console.log(`[VLC] Launched "${name}" → rtmp://localhost/live/${key} (pid=${proc.pid})`);
+  res.json({ success: true, key, pid: proc.pid });
+});
+
+// POST /api/show-channels/:key/stop — kill VLC for this channel
+app.post('/api/show-channels/:key/stop', (req, res) => {
+  const { key }  = req.params;
+  const proc     = vlcProcesses.get(key);
+  if (!proc) return res.status(404).json({ error: 'No VLC process for this channel' });
+  proc.kill('SIGTERM');
+  vlcProcesses.delete(key);
+  res.json({ success: true });
 });
 
 app.listen(HTTP_PORT, () => {
