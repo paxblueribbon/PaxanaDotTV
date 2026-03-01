@@ -1,0 +1,194 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  gap: 1.25rem;
+  padding: 2rem 1rem;
+}
+
+header {
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+header span { color: #fff; }
+
+/* ── Channel list view ── */
+#channel-list-view {
+  width: min(900px, 96vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#channel-list-view h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #555;
+  border-bottom: 1px solid #1c1c1c;
+  padding-bottom: 0.5rem;
+}
+
+#channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.channel-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #111;
+  border: 1px solid #222;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.channel-item:hover {
+  background: #181818;
+  border-color: #444;
+}
+
+.channel-item .channel-key {
+  font-size: 0.9rem;
+  color: #ddd;
+  flex: 1;
+}
+
+.channel-item .watch-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+#no-channels {
+  color: #444;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+/* ── Player view ── */
+#player-view {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+#player-view.active { display: flex; }
+
+#back-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid #333;
+  color: #888;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+#back-btn:hover { border-color: #666; color: #ccc; }
+
+#stage {
+  position: relative;
+  width: min(900px, 96vw);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid #222;
+}
+
+video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+video::-webkit-media-controls { display: none !important; }
+video::-webkit-media-controls-enclosure { display: none !important; }
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: rgba(0,0,0,0.7);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+#status-text {
+  font-size: 0.85rem;
+  color: #888;
+  letter-spacing: 0.1em;
+}
+
+#live-badge {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(255,59,48,0.85);
+  padding: 3px 8px 3px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+#live-badge.visible { opacity: 1; }
+#live-badge .dot { width: 6px; height: 6px; background: #fff; }
+
+#channel-label {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+footer {
+  font-size: 0.7rem;
+  color: #444;
+  letter-spacing: 0.1em;
+}
