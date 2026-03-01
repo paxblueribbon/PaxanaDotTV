@@ -508,6 +508,7 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
     '-i', concatPath,
     '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'veryfast',
     '-x264opts', 'keyint=120:min-keyint=120:scenecut=0',
+    '-pix_fmt', 'yuv420p',
     '-vf', 'fps=30',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-f', 'flv', rtmpUrl,
