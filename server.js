@@ -40,6 +40,15 @@ const nms = new NodeMediaServer({
         hlsFlags: '[hls_time=4:hls_list_size=10:hls_flags=delete_segments]',
         hlsKeep: false,
         dash: false,
+        // Force audio re-encode: fixes slowed-down audio caused by VLC RTMP
+        // timestamp drift being passed through in stream-copy mode.
+        ac: 'aac',
+        acParam: ['-ar', '44100'],
+        // Force CFR video re-encode: fixes stuttering caused by variable frame
+        // timestamps in the RTMP stream. GOP kept at 120 frames (4s @ 30fps)
+        // to stay aligned with HLS segment boundaries.
+        vc: 'libx264',
+        vcParam: ['-vsync', 'cfr', '-r', '30', '-g', '120', '-sc_threshold', '0'],
       },
     ],
   },
