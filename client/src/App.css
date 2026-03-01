@@ -134,6 +134,13 @@ header span { color: #fff; }
 .channel-item:hover .launch-btn { color: #aaa; }
 .launch-btn:disabled { color: #333; cursor: default; }
 
+.ch-error {
+  font-size: 0.68rem;
+  color: #a33;
+  padding: 0.35rem 0.75rem 0.35rem calc(0.75rem + 7px + 0.75rem); /* align under name */
+  letter-spacing: 0.03em;
+}
+
 #no-channels {
   color: #444;
   font-size: 0.85rem;

@@ -49,6 +49,19 @@ if (!fs.existsSync(SHOWS_DIR)) fs.mkdirSync(SHOWS_DIR, { recursive: true });
 // Running VLC child processes, keyed by channel key
 const vlcProcesses = new Map();
 
+// Finds the VLC executable. Checks VLC_PATH env var first, then common locations.
+function findVlc() {
+  if (process.env.VLC_PATH) return process.env.VLC_PATH;
+  const candidates = [
+    '/Applications/VLC.app/Contents/MacOS/VLC', // macOS
+    '/usr/bin/vlc',                              // Linux
+    '/usr/local/bin/vlc',                        // Homebrew / generic
+    '/opt/homebrew/bin/vlc',                     // macOS Apple Silicon Homebrew
+    '/snap/bin/vlc',                             // Linux snap
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
+
 function showNameToKey(name) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -488,7 +501,16 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
 
   const playlistPath = buildPlaylist(showDir, videos);
 
-  const vlcPath = process.env.VLC_PATH || 'vlc';
+  const vlcPath = findVlc();
+  if (!vlcPath) {
+    return res.status(500).json({
+      error: 'VLC not found. Set VLC_PATH in your .env (e.g. VLC_PATH=/Applications/VLC.app/Contents/MacOS/VLC)',
+    });
+  }
+  if (path.isAbsolute(vlcPath) && !fs.existsSync(vlcPath)) {
+    return res.status(500).json({ error: `VLC not found at "${vlcPath}". Check your VLC_PATH setting.` });
+  }
+
   const sout    = [
     '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128',
     'venc=x264{keyint=120,min-keyint=120,scenecut=0}}',
