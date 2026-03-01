@@ -146,4 +146,57 @@ function getAllShows() {
   });
 }
 
-module.exports = { getAllMovies, addMovie, getAllShows };
+// ── Temporary import helper (call once, then remove) ─────────────────────────
+function importFromJson(moviesPath, tvPath) {
+  const result = { movies: { imported: 0, skipped: 0 }, shows: { imported: 0, skipped: 0 } };
+
+  if (fs.existsSync(moviesPath)) {
+    const { movies = [] } = JSON.parse(fs.readFileSync(moviesPath, 'utf8'));
+    const exists = db.prepare('SELECT 1 FROM movies WHERE embed_url = ?');
+    const ins    = db.prepare(`
+      INSERT INTO movies (title, director, release_year, genre, poster_url, embed_url)
+      VALUES (@title, @director, @release_year, @genre, @poster_url, @embed_url)
+    `);
+    db.transaction(() => {
+      for (const m of movies) {
+        if (exists.get(m.embed_url)) { result.movies.skipped++; }
+        else { ins.run(m); result.movies.imported++; }
+      }
+    })();
+  }
+
+  if (fs.existsSync(tvPath)) {
+    const { shows = [] } = JSON.parse(fs.readFileSync(tvPath, 'utf8'));
+    const showExists = db.prepare('SELECT id FROM shows WHERE title = ?');
+    const insShow    = db.prepare(`
+      INSERT INTO shows (title, channel, description, image_url)
+      VALUES (@title, @channel, @description, @image_url)
+    `);
+    const insEp = db.prepare(`
+      INSERT INTO episodes (show_id, season, episode_number, episode_title, embed_url)
+      VALUES (@show_id, @season, @episode_number, @episode_title, @embed_url)
+    `);
+    db.transaction(() => {
+      for (const show of shows) {
+        const existing = showExists.get(show.title);
+        if (existing) { result.shows.skipped++; continue; }
+        const { lastInsertRowid: showId } = insShow.run(show);
+        for (const s of (show.seasons || [])) {
+          for (const ep of (s.episodes || [])) {
+            insEp.run({
+              show_id: showId, season: s.season,
+              episode_number: ep.episode_number,
+              episode_title:  ep.episode_title || '',
+              embed_url:      ep.embed_url     || '',
+            });
+          }
+        }
+        result.shows.imported++;
+      }
+    })();
+  }
+
+  return result;
+}
+
+module.exports = { getAllMovies, addMovie, getAllShows, importFromJson };

@@ -105,6 +105,17 @@ app.use(express.json());
 app.get('/movies.json', (_req, res) => res.json({ movies: db.getAllMovies() }));
 app.get('/tv.json',     (_req, res) => res.json({ shows:  db.getAllShows()  }));
 
+// TEMPORARY: import existing JSON files into the DB — remove after use
+// Usage: visit http://localhost:3000/api/import-json in a browser
+// Place movies.json / tv.json in the data/ folder first.
+app.get('/api/import-json', (req, res) => {
+  const result = db.importFromJson(
+    path.join(__dirname, 'data', 'movies.json'),
+    path.join(__dirname, 'data', 'tv.json')
+  );
+  res.json({ ok: true, result });
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve HLS segments from the media root
