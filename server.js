@@ -2,9 +2,38 @@ const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const multer = require('multer');
 const { Storage } = require('megajs');
 const ffmpegPath = require('ffmpeg-static');
+
+// ── Simple password auth ──────────────────────────────────────────────────────
+const SITE_PASSWORD = process.env.SITE_PASSWORD || 'paxana';
+const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(32).toString('hex');
+const AUTH_COOKIE   = 'paxana_auth';
+
+if (!process.env.SITE_PASSWORD) {
+  console.warn('[auth] SITE_PASSWORD not set — using default "paxana". Set it in your env!');
+}
+
+function makeToken() {
+  return crypto.createHmac('sha256', COOKIE_SECRET).update(SITE_PASSWORD).digest('hex');
+}
+
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach(pair => {
+    const [k, ...v] = pair.split('=');
+    if (k.trim()) out[k.trim()] = decodeURIComponent(v.join('=').trim());
+  });
+  return out;
+}
+
+function requireAuth(req, res, next) {
+  if (req.path === '/login' || req.path === '/logout') return next();
+  if (parseCookies(req)[AUTH_COOKIE] === makeToken()) return next();
+  res.redirect('/login');
+}
 
 // MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
 const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
@@ -100,6 +129,74 @@ nms.on('donePublish', (id, streamPath, args) => {
 const app = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(requireAuth);
+
+const LOGIN_HTML = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Paxana.TV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #0a0a0a; color: #f0f0f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    header { font-size: 2rem; font-weight: 700; letter-spacing: -.5px; margin-bottom: 2rem; }
+    header span { color: #e63946; }
+    form {
+      display: flex; flex-direction: column; gap: .75rem;
+      background: #141414; border: 1px solid #222; border-radius: 10px;
+      padding: 2rem; width: min(320px, 90vw);
+    }
+    input[type=password] {
+      padding: .6rem .8rem; border-radius: 6px; border: 1px solid #333;
+      background: #1e1e1e; color: #f0f0f0; font-size: 1rem; outline: none;
+    }
+    input[type=password]:focus { border-color: #e63946; }
+    button {
+      padding: .65rem; border-radius: 6px; border: none;
+      background: #e63946; color: #fff; font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    .err { color: #e63946; font-size: .875rem; text-align: center; }
+    footer { margin-top: 3rem; font-size: .8rem; color: #444; }
+  </style>
+</head>
+<body>
+  <header><span>Paxana</span>.TV</header>
+  <form method="POST" action="/login">
+    <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+    {{error}}
+    <button type="submit">Enter</button>
+  </form>
+  <footer>tune in. sit back. enjoy.</footer>
+</body>
+</html>`;
+
+app.get('/login', (req, res) => {
+  res.send(LOGIN_HTML.replace('{{error}}', ''));
+});
+
+app.post('/login', (req, res) => {
+  if (req.body.password === SITE_PASSWORD) {
+    const token   = makeToken();
+    const maxAge  = 7 * 24 * 60 * 60; // 1 week in seconds
+    res.setHeader('Set-Cookie', `${AUTH_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Strict`);
+    return res.redirect('/');
+  }
+  res.status(401).send(LOGIN_HTML.replace('{{error}}', '<p class="err">Incorrect password</p>'));
+});
+
+app.get('/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+  res.redirect('/login');
+});
 
 // Serve catalogue data from the database
 app.get('/movies.json', (_req, res) => res.json({ movies: db.getAllMovies() }));
