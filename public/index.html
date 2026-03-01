@@ -15,9 +15,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       min-height: 100vh;
       gap: 1.25rem;
+      padding: 2rem 1rem;
     }
 
     header {
@@ -27,9 +27,94 @@
       color: #888;
     }
 
-    header span {
-      color: #fff;
+    header span { color: #fff; }
+
+    /* ── Channel list view ── */
+    #channel-list-view {
+      width: min(900px, 96vw);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
+
+    #channel-list-view h2 {
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #555;
+      border-bottom: 1px solid #1c1c1c;
+      padding-bottom: 0.5rem;
+    }
+
+    #channel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: #111;
+      border: 1px solid #222;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .channel-item:hover {
+      background: #181818;
+      border-color: #444;
+    }
+
+    .channel-item .channel-key {
+      font-size: 0.9rem;
+      color: #ddd;
+      flex: 1;
+    }
+
+    .channel-item .watch-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+    }
+
+    #no-channels {
+      color: #444;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      padding: 2rem 0;
+      text-align: center;
+    }
+
+    /* ── Player view ── */
+    #player-view {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      width: 100%;
+    }
+
+    #player-view.active { display: flex; }
+
+    #back-btn {
+      align-self: flex-start;
+      background: none;
+      border: 1px solid #333;
+      color: #888;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    #back-btn:hover { border-color: #666; color: #ccc; }
 
     #stage {
       position: relative;
@@ -43,11 +128,9 @@
       width: 100%;
       height: 100%;
       display: block;
-      /* Remove all browser-default controls */
       pointer-events: none;
     }
 
-    /* Hide any controls the browser might render */
     video::-webkit-media-controls { display: none !important; }
     video::-webkit-media-controls-enclosure { display: none !important; }
 
@@ -60,7 +143,6 @@
       justify-content: center;
       gap: 0.75rem;
       background: rgba(0,0,0,0.7);
-      transition: opacity 0.4s;
     }
 
     #overlay.hidden { display: none; }
@@ -103,11 +185,16 @@
     }
 
     #live-badge.visible { opacity: 1; }
+    #live-badge .dot { width: 6px; height: 6px; background: #fff; }
 
-    #live-badge .dot {
-      width: 6px;
-      height: 6px;
-      background: #fff;
+    #channel-label {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
     }
 
     footer {
@@ -121,39 +208,115 @@
 
   <header><span>Paxana</span>.TV</header>
 
-  <div id="stage">
-    <video id="player" autoplay muted playsinline></video>
-
-    <div id="live-badge">
-      <div class="dot"></div>
-      live
+  <!-- Channel list view -->
+  <div id="channel-list-view">
+    <h2>Live Channels</h2>
+    <div id="channel-list">
+      <div id="no-channels">No streams are live right now.</div>
     </div>
+  </div>
 
-    <div id="overlay">
-      <div class="dot"></div>
-      <div id="status-text">Waiting for stream…</div>
+  <!-- Player view -->
+  <div id="player-view">
+    <button id="back-btn">← All Channels</button>
+    <div id="stage">
+      <video id="player" autoplay muted playsinline></video>
+      <div id="live-badge">
+        <div class="dot"></div>
+        live
+      </div>
+      <div id="channel-label"></div>
+      <div id="overlay">
+        <div class="dot"></div>
+        <div id="status-text">Connecting…</div>
+      </div>
     </div>
   </div>
 
   <footer>tune in. sit back. enjoy.</footer>
 
   <script>
-    const player    = document.getElementById('player');
-    const overlay   = document.getElementById('overlay');
-    const statusTxt = document.getElementById('status-text');
-    const liveBadge = document.getElementById('live-badge');
+    const player       = document.getElementById('player');
+    const overlay      = document.getElementById('overlay');
+    const statusTxt    = document.getElementById('status-text');
+    const liveBadge    = document.getElementById('live-badge');
+    const channelLabel = document.getElementById('channel-label');
+    const listView     = document.getElementById('channel-list-view');
+    const playerView   = document.getElementById('player-view');
+    const channelList  = document.getElementById('channel-list');
+    const noChannels   = document.getElementById('no-channels');
+    const backBtn      = document.getElementById('back-btn');
 
-    const HLS_URL   = '/hls/live/live/index.m3u8';
-    const POLL_MS   = 4000;   // how often to check if stream is up
-    const RETRY_MS  = 5000;   // how long to wait before re-attaching on error
+    const POLL_MS  = 4000;
+    const RETRY_MS = 5000;
 
-    let hls = null;
-    let polling = null;
+    let hls       = null;
+    let polling   = null;
+    let listPoll  = null;
+    let activeKey = null;
+
+    // ── Channel list ─────────────────────────────────────────────────────────
+
+    async function refreshChannelList() {
+      try {
+        const res  = await fetch('/channels');
+        const data = await res.json();
+        renderChannelList(data.channels);
+      } catch (_) {}
+    }
+
+    function renderChannelList(channels) {
+      channelList.innerHTML = '';
+      if (!channels.length) {
+        channelList.appendChild(noChannels);
+        return;
+      }
+      channels.forEach(ch => {
+        const item = document.createElement('div');
+        item.className = 'channel-item';
+        item.innerHTML = `
+          <div class="dot"></div>
+          <div class="channel-key">${escapeHtml(ch.key)}</div>
+          <div class="watch-label">watch →</div>
+        `;
+        item.addEventListener('click', () => watchChannel(ch.key));
+        channelList.appendChild(item);
+      });
+    }
+
+    function startListPolling() {
+      refreshChannelList();
+      listPoll = setInterval(refreshChannelList, POLL_MS);
+    }
+
+    function stopListPolling() {
+      if (listPoll) { clearInterval(listPoll); listPoll = null; }
+    }
+
+    // ── Player ───────────────────────────────────────────────────────────────
+
+    function watchChannel(key) {
+      activeKey = key;
+      listView.style.display = 'none';
+      playerView.classList.add('active');
+      stopListPolling();
+      channelLabel.textContent = key;
+      attachHls(key);
+    }
+
+    function goBack() {
+      activeKey = null;
+      destroyHls();
+      stopPolling();
+      playerView.classList.remove('active');
+      listView.style.display = '';
+      startListPolling();
+    }
 
     function setWaiting(msg) {
       overlay.classList.remove('hidden');
       liveBadge.classList.remove('visible');
-      statusTxt.textContent = msg || 'Waiting for stream…';
+      statusTxt.textContent = msg || 'Connecting…';
     }
 
     function setLive() {
@@ -165,12 +328,14 @@
       if (hls) { hls.destroy(); hls = null; }
     }
 
-    function attachHls() {
+    function attachHls(key) {
       destroyHls();
+      setWaiting('Connecting…');
+      const hlsUrl = `/hls/live/${encodeURIComponent(key)}/index.m3u8`;
 
       if (!Hls.isSupported()) {
         // Safari native HLS
-        player.src = HLS_URL;
+        player.src = hlsUrl;
         player.play().catch(() => {});
         setLive();
         return;
@@ -200,42 +365,53 @@
         } else {
           destroyHls();
           setWaiting('Stream interrupted – reconnecting…');
-          setTimeout(startPolling, RETRY_MS);
+          startPolling(key);
         }
       });
 
-      hls.loadSource(HLS_URL);
+      hls.loadSource(hlsUrl);
       hls.attachMedia(player);
     }
 
-    async function checkStream() {
+    async function checkStream(key) {
+      // Guard against stale callbacks after navigating away
+      if (activeKey !== key) return;
       try {
-        const res  = await fetch('/status');
+        const res  = await fetch(`/status/${encodeURIComponent(key)}`);
         const data = await res.json();
         if (data.live) {
           stopPolling();
-          attachHls();
+          attachHls(key);
+        } else {
+          stopPolling();
+          setWaiting('Stream ended.');
+          setTimeout(goBack, 2000);
         }
-      } catch (_) {
-        // network error – keep polling
-      }
+      } catch (_) {}
     }
 
-    function startPolling() {
+    function startPolling(key) {
       if (polling) return;
-      setWaiting('Waiting for stream…');
-      checkStream();
-      polling = setInterval(checkStream, POLL_MS);
+      checkStream(key);
+      polling = setInterval(() => checkStream(key), POLL_MS);
     }
 
     function stopPolling() {
       if (polling) { clearInterval(polling); polling = null; }
     }
 
-    // Unmute once the user interacts (browser autoplay policy)
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    backBtn.addEventListener('click', goBack);
     document.addEventListener('click', () => { player.muted = false; }, { once: true });
 
-    startPolling();
+    startListPolling();
   </script>
 </body>
 </html>

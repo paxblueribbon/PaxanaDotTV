@@ -6,8 +6,10 @@ const ffmpegPath = require('ffmpeg-static');
 
 const HTTP_PORT = process.env.PORT || 3000;
 const RTMP_PORT = 1935;
-const STREAM_KEY = process.env.STREAM_KEY || 'live';
 const MEDIA_ROOT = path.join(__dirname, 'media');
+
+// Tracks which stream keys are currently publishing
+const activeStreams = new Set();
 
 // Ensure media directory exists
 if (!fs.existsSync(MEDIA_ROOT)) {
@@ -46,10 +48,14 @@ const nms = new NodeMediaServer({
 nms.run();
 
 nms.on('prePublish', (id, streamPath, args) => {
+  const key = streamPath.split('/').pop();
+  activeStreams.add(key);
   console.log(`[RTMP] Stream started: ${streamPath}`);
 });
 
 nms.on('donePublish', (id, streamPath, args) => {
+  const key = streamPath.split('/').pop();
+  activeStreams.delete(key);
   console.log(`[RTMP] Stream ended: ${streamPath}`);
 });
 
@@ -71,11 +77,20 @@ app.use('/hls', express.static(MEDIA_ROOT, {
   },
 }));
 
-// Stream status endpoint
-app.get('/status', (req, res) => {
-  const playlistPath = path.join(MEDIA_ROOT, 'live', STREAM_KEY, 'index.m3u8');
-  const live = fs.existsSync(playlistPath);
-  res.json({ live, streamKey: STREAM_KEY });
+// List all live channels
+app.get('/channels', (req, res) => {
+  const channels = [...activeStreams].map(key => ({
+    key,
+    hlsUrl: `/hls/live/${key}/index.m3u8`,
+  }));
+  res.json({ channels });
+});
+
+// Check if a specific channel is live
+app.get('/status/:channel', (req, res) => {
+  const { channel } = req.params;
+  const live = activeStreams.has(channel);
+  res.json({ live, streamKey: channel });
 });
 
 app.listen(HTTP_PORT, () => {
@@ -84,13 +99,13 @@ app.listen(HTTP_PORT, () => {
 │              Paxana.TV  –  on the air                │
 ├──────────────────────────────────────────────────────┤
 │  Viewer URL : http://localhost:${HTTP_PORT}                  │
-│  RTMP ingest: rtmp://localhost/live/${STREAM_KEY}           │
-│  HLS output : /hls/live/${STREAM_KEY}/index.m3u8           │
+│  RTMP ingest: rtmp://localhost/live/<channel-key>    │
+│  HLS output : /hls/live/<channel-key>/index.m3u8    │
 └──────────────────────────────────────────────────────┘
 
-VLC command:
+VLC command (use any name for <channel-key>):
   vlc <file> \\
-    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${STREAM_KEY}}' \\
+    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/<channel-key>}' \\
     --loop
 
 `);
