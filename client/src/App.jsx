@@ -69,9 +69,9 @@ export default function App() {
 
       {!inDetail && (
         <nav id="section-nav">
-          <button className={section === 'live'   ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
           <button className={section === 'movies' ? 'active' : ''} onClick={() => setSection('movies')}>Movies</button>
           <button className={section === 'tv'     ? 'active' : ''} onClick={() => setSection('tv')}>TV</button>
+          <button className={section === 'live'   ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
         </nav>
       )}
 
