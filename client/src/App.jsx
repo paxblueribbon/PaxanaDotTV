@@ -4,6 +4,7 @@ import Player from './components/Player'
 import MediaGrid from './components/MediaGrid'
 import ShowDetail from './components/ShowDetail'
 import MegaPlayer from './components/MegaPlayer'
+import UploadModal from './components/UploadModal'
 
 export default function App() {
   const [section, setSection] = useState('live')
@@ -11,11 +12,18 @@ export default function App() {
   const [activeMovie, setActiveMovie] = useState(null)
   const [activeShow, setActiveShow] = useState(null)
   const [activeEpisode, setActiveEpisode] = useState(null) // { ep, seasonNum }
+  const [showUpload, setShowUpload] = useState(false)
+  const [moviesRefreshKey, setMoviesRefreshKey] = useState(0)
 
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
 
   function handleEpisodeSelect(ep, seasonNum) {
     setActiveEpisode({ ep, seasonNum })
+  }
+
+  function handleUploadSuccess() {
+    setShowUpload(false)
+    setMoviesRefreshKey(k => k + 1)
   }
 
   let view
@@ -50,7 +58,7 @@ export default function App() {
   } else if (section === 'live') {
     view = <ChannelList onWatch={setActiveKey} />
   } else if (section === 'movies') {
-    view = <MediaGrid section="movies" dataKey="movies" onSelect={setActiveMovie} />
+    view = <MediaGrid key={moviesRefreshKey} section="movies" dataKey="movies" onSelect={setActiveMovie} />
   } else {
     view = <MediaGrid section="tv" dataKey="shows" onSelect={setActiveShow} />
   }
@@ -61,13 +69,24 @@ export default function App() {
 
       {!inDetail && (
         <nav id="section-nav">
-          <button className={section === 'live' ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
+          <button className={section === 'live'   ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
           <button className={section === 'movies' ? 'active' : ''} onClick={() => setSection('movies')}>Movies</button>
-          <button className={section === 'tv' ? 'active' : ''} onClick={() => setSection('tv')}>TV</button>
+          <button className={section === 'tv'     ? 'active' : ''} onClick={() => setSection('tv')}>TV</button>
         </nav>
       )}
 
       {view}
+
+      {!inDetail && section === 'movies' && (
+        <button id="upload-btn" onClick={() => setShowUpload(true)} title="Add movie">+</button>
+      )}
+
+      {showUpload && (
+        <UploadModal
+          onClose={() => setShowUpload(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      )}
 
       <footer>tune in. sit back. enjoy.</footer>
     </>

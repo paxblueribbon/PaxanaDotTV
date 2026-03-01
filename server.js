@@ -2,7 +2,25 @@ const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const multer = require('multer');
 const ffmpegPath = require('ffmpeg-static');
+
+const execAsync = promisify(exec);
+
+// Remote MEGA folder for uploaded movies (override with MEGA_FOLDER env var)
+const MEGA_FOLDER = (process.env.MEGA_FOLDER || '/Movies').replace(/['"\\`]/g, '');
+const MOVIES_JSON = path.join(__dirname, 'public', 'movies.json');
+
+const uploadStorage = multer.diskStorage({
+  destination: '/tmp',
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '') || '.mp4';
+    cb(null, `${Date.now()}${ext}`);
+  },
+});
+const upload = multer({ storage: uploadStorage });
 
 const HTTP_PORT = process.env.PORT || 3000;
 const RTMP_PORT = 1935;
@@ -71,6 +89,7 @@ nms.on('donePublish', (id, streamPath, args) => {
 // ── Express (viewer frontend + HLS files) ────────────────────────────────────
 const app = express();
 
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve HLS segments from the media root
@@ -100,6 +119,70 @@ app.get('/status/:channel', (req, res) => {
   const { channel } = req.params;
   const live = activeStreams.has(channel);
   res.json({ live, streamKey: channel });
+});
+
+// ── Movie upload ──────────────────────────────────────────────────────────────
+// POST /api/movies  multipart/form-data
+//   file       – video file (required)
+//   title      – movie title (required)
+//   director   – director name
+//   year       – release year
+//   genre      – genre string
+//   poster_url – URL to poster image
+//
+// Requires MEGAcmd installed and authenticated on the host (`mega-login` once).
+app.post('/api/movies', upload.single('file'), async (req, res) => {
+  const { title, director, year, genre, poster_url } = req.body;
+
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+  if (!title)    return res.status(400).json({ error: 'Title is required' });
+
+  const uploadPath  = req.file.path;                          // e.g. /tmp/1234567890.mp4
+  const remotePath  = `${MEGA_FOLDER}/${req.file.filename}`;  // e.g. /Movies/1234567890.mp4
+
+  try {
+    // Ensure remote folder exists (ignore error if it already does)
+    try { await execAsync(`mega-mkdir -p "${MEGA_FOLDER}"`); } catch (_) {}
+
+    // Upload file to MEGA
+    await execAsync(`mega-put "${uploadPath}" "${MEGA_FOLDER}/"`);
+
+    // Create public export link – output like:
+    //   Exported /Movies/1234.mp4: https://mega.nz/file/ABC123#key
+    const { stdout } = await execAsync(`mega-export -a "${remotePath}"`);
+    const match = stdout.match(/https?:\/\/mega\.nz\/file\/([^\s]+)/);
+    if (!match) throw new Error(`Unexpected mega-export output: ${stdout.trim()}`);
+    const embedUrl = match[1]; // "ID#key"
+
+    // Read existing movies.json (or start fresh)
+    let data = { movies: [] };
+    if (fs.existsSync(MOVIES_JSON)) {
+      data = JSON.parse(fs.readFileSync(MOVIES_JSON, 'utf8'));
+    }
+
+    const newId = data.movies.length > 0
+      ? Math.max(...data.movies.map(m => Number(m.id))) + 1
+      : 1;
+
+    const movie = {
+      id:           newId,
+      title:        title.trim(),
+      director:     (director    || '').trim(),
+      release_year: year ? parseInt(year, 10) : null,
+      genre:        (genre       || '').trim(),
+      poster_url:   (poster_url  || '').trim(),
+      embed_url:    embedUrl,
+    };
+
+    data.movies.push(movie);
+    fs.writeFileSync(MOVIES_JSON, JSON.stringify(data, null, 2));
+
+    res.json({ success: true, movie });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { fs.unlinkSync(uploadPath); } catch (_) {}
+  }
 });
 
 app.listen(HTTP_PORT, () => {

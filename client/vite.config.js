@@ -9,6 +9,7 @@ export default defineConfig({
       '/channels': 'http://localhost:3000',
       '/status':   'http://localhost:3000',
       '/hls':      'http://localhost:3000',
+      '/api':      'http://localhost:3000',
     },
   },
   build: {
