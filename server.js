@@ -511,7 +511,11 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
     '-vf', 'fps=30',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
     '-f', 'flv', rtmpUrl,
-  ], { stdio: 'ignore' });
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  proc.stderr.on('data', chunk => {
+    process.stderr.write(`[ffmpeg/${key}] ${chunk}`);
+  });
 
   proc.on('error', err => {
     console.error(`[ffmpeg] Failed to start "${name}":`, err.message);
