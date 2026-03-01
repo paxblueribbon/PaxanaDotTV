@@ -420,6 +420,10 @@ footer {
 
 .episode-item.unavailable {
   cursor: default;
+}
+
+.episode-item.unavailable .ep-num,
+.episode-item.unavailable .ep-title {
   opacity: 0.35;
 }
 
@@ -449,6 +453,21 @@ footer {
   color: #555;
   flex-shrink: 0;
 }
+
+.ep-add {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: #444;
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.episode-item.unavailable:hover .ep-add { color: #888; }
 
 /* ── Upload button ── */
 #upload-btn {
@@ -590,3 +609,28 @@ footer {
   border-color: #333 !important;
 }
 #upload-submit:hover:not(:disabled) { color: #fff !important; border-color: #888 !important; }
+
+/* ── Episode upload modal mode tabs ── */
+#ep-mode-tabs {
+  display: flex;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.ep-mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-right: 1px solid #1e1e1e;
+  color: #444;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.ep-mode-btn:last-child { border-right: none; }
+.ep-mode-btn:hover:not(:disabled) { color: #aaa; background: #111; }
+.ep-mode-btn.active { color: #ddd; background: #181818; }
+.ep-mode-btn:disabled { opacity: 0.4; cursor: default; }

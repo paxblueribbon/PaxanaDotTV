@@ -307,6 +307,68 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   }
 });
 
+// ── Episode MEGA-link / upload ─────────────────────────────────────────────────
+// PATCH /api/episodes/:id   body: { embed_url }   — set MEGA ID directly
+app.patch('/api/episodes/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'Invalid episode id' });
+
+  let { embed_url } = req.body;
+  if (!embed_url || !embed_url.trim()) return res.status(400).json({ error: 'embed_url is required' });
+
+  // Accept full MEGA URL (https://mega.nz/file/ID#key) or bare ID#key
+  embed_url = embed_url.trim();
+  const match = embed_url.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/);
+  if (match) embed_url = match[1];
+
+  try {
+    const episode = db.updateEpisodeUrl(id, embed_url);
+    res.json({ success: true, episode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/episodes/:id/upload   multipart: { file }   — upload to MEGA then set embed_url
+app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'Invalid episode id' });
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+  const uploadPath = req.file.path;
+
+  try {
+    const storage = await getMegaStorage();
+
+    let folder = (storage.root.children || []).find(
+      f => f.directory && f.name === MEGA_FOLDER_NAME
+    );
+    if (!folder) folder = await storage.root.mkdir(MEGA_FOLDER_NAME);
+
+    const ext      = path.extname(req.file.filename);
+    const safeName = `ep_${id}_${Date.now()}${ext}`;
+    const { size } = fs.statSync(uploadPath);
+    const megaFile = await folder.upload(
+      { name: safeName, size },
+      fs.createReadStream(uploadPath)
+    ).complete;
+
+    console.log(`[MEGA] Uploaded episode: ${MEGA_FOLDER_NAME}/${safeName}`);
+
+    const url   = await megaFile.link();
+    const match = url.match(/mega\.nz\/(?:file|#!)\/([^\s]+)/);
+    if (!match) throw new Error(`Unexpected MEGA link format: ${url}`);
+
+    const episode = db.updateEpisodeUrl(id, match[1]);
+    res.json({ success: true, episode });
+  } catch (err) {
+    _megaStorage = null;
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { fs.unlinkSync(uploadPath); } catch (_) {}
+  }
+});
+
 app.listen(HTTP_PORT, () => {
   console.log(`
 ┌──────────────────────────────────────────────────────┐

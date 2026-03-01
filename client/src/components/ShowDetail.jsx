@@ -1,8 +1,16 @@
 import { useState } from 'react'
+import EpisodeUploadModal from './EpisodeUploadModal'
 
-export default function ShowDetail({ show, onSelect, onBack }) {
+export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated }) {
   const [seasonIdx, setSeasonIdx] = useState(0)
+  const [editEp, setEditEp]       = useState(null) // { id, episode_number, episode_title, season }
+
   const season = show.seasons[seasonIdx]
+
+  function handleSuccess(episodeId, embedUrl) {
+    setEditEp(null)
+    onEpisodeUpdated(episodeId, embedUrl)
+  }
 
   return (
     <div id="show-detail-view">
@@ -40,11 +48,29 @@ export default function ShowDetail({ show, onSelect, onBack }) {
             >
               <span className="ep-num">E{ep.episode_number}</span>
               <span className="ep-title">{ep.episode_title}</span>
-              {available && <span className="ep-watch">watch →</span>}
+              {available
+                ? <span className="ep-watch">watch →</span>
+                : (
+                  <button
+                    className="ep-add"
+                    onClick={e => { e.stopPropagation(); setEditEp({ ...ep, season: season.season }) }}
+                  >
+                    add →
+                  </button>
+                )
+              }
             </div>
           )
         })}
       </div>
+
+      {editEp && (
+        <EpisodeUploadModal
+          episode={editEp}
+          onClose={() => setEditEp(null)}
+          onSuccess={handleSuccess}
+        />
+      )}
     </div>
   )
 }

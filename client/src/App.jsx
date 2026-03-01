@@ -21,6 +21,18 @@ export default function App() {
     setActiveEpisode({ ep, seasonNum })
   }
 
+  function handleEpisodeUpdated(episodeId, embedUrl) {
+    setActiveShow(show => ({
+      ...show,
+      seasons: show.seasons.map(s => ({
+        ...s,
+        episodes: s.episodes.map(ep =>
+          ep.id === episodeId ? { ...ep, embed_url: embedUrl } : ep
+        ),
+      })),
+    }))
+  }
+
   function handleUploadSuccess() {
     setShowUpload(false)
     setMoviesRefreshKey(k => k + 1)
@@ -53,6 +65,7 @@ export default function App() {
         show={activeShow}
         onSelect={handleEpisodeSelect}
         onBack={() => setActiveShow(null)}
+        onEpisodeUpdated={handleEpisodeUpdated}
       />
     )
   } else if (section === 'live') {

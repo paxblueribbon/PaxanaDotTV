@@ -138,8 +138,8 @@ function getAllShows() {
         season:   s,
         episodes: eps
           .filter(e => e.season === s)
-          .map(({ episode_number, episode_title, embed_url }) =>
-            ({ episode_number, episode_title, embed_url })
+          .map(({ id, episode_number, episode_title, embed_url }) =>
+            ({ id, episode_number, episode_title, embed_url })
           ),
       })),
     };
@@ -199,4 +199,9 @@ function importFromJson(moviesPath, tvPath) {
   return result;
 }
 
-module.exports = { getAllMovies, addMovie, getAllShows, importFromJson };
+function updateEpisodeUrl(id, embedUrl) {
+  db.prepare('UPDATE episodes SET embed_url = ? WHERE id = ?').run(embedUrl, id);
+  return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
+}
+
+module.exports = { getAllMovies, addMovie, getAllShows, updateEpisodeUrl, importFromJson };
