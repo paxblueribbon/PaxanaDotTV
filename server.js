@@ -46,21 +46,8 @@ const VIDEO_EXTS = new Set(['.mp4', '.mkv', '.avi', '.mov', '.m4v', '.wmv', '.fl
 
 if (!fs.existsSync(SHOWS_DIR)) fs.mkdirSync(SHOWS_DIR, { recursive: true });
 
-// Running VLC child processes, keyed by channel key
-const vlcProcesses = new Map();
-
-// Finds the VLC executable. Checks VLC_PATH env var first, then common locations.
-function findVlc() {
-  if (process.env.VLC_PATH) return process.env.VLC_PATH;
-  const candidates = [
-    '/Applications/VLC.app/Contents/MacOS/VLC', // macOS
-    '/usr/bin/vlc',                              // Linux
-    '/usr/local/bin/vlc',                        // Homebrew / generic
-    '/opt/homebrew/bin/vlc',                     // macOS Apple Silicon Homebrew
-    '/snap/bin/vlc',                             // Linux snap
-  ];
-  return candidates.find(p => fs.existsSync(p)) || null;
-}
+// Running ffmpeg child processes, keyed by channel key
+const ffmpegProcesses = new Map();
 
 function showNameToKey(name) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -78,13 +65,16 @@ function getVideoFiles(showDir) {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
-// Creates playlist.m3u in the show folder if one doesn't already exist.
-// Always regenerates so newly added episodes are picked up on next launch.
-function buildPlaylist(showDir, videoFiles) {
-  const playlistPath = path.join(showDir, 'playlist.m3u');
-  const lines = ['#EXTM3U', ...videoFiles.map(f => path.join(showDir, f))];
-  fs.writeFileSync(playlistPath, lines.join('\n') + '\n', 'utf8');
-  return playlistPath;
+// Generates an ffmpeg concat file listing all episodes.
+// Always regenerates so newly added files are picked up on next launch.
+function buildConcatFile(showDir, videoFiles) {
+  const concatPath = path.join(showDir, 'concat.txt');
+  const lines = [
+    'ffconcat version 1.0',
+    ...videoFiles.map(f => `file '${path.join(showDir, f).replace(/'/g, "'\\''")}'`),
+  ];
+  fs.writeFileSync(concatPath, lines.join('\n') + '\n', 'utf8');
+  return concatPath;
 }
 
 // ── TMDB helper ───────────────────────────────────────────────────────────────
@@ -137,8 +127,7 @@ const MEDIA_ROOT = path.join(__dirname, 'media');
 // Tracks which stream keys are currently publishing
 const activeStreams   = new Set();
 // Pending removal timers, cancelled if the stream reconnects within the grace period.
-// VLC briefly drops the RTMP connection between playlist items during --loop transitions;
-// without this, the channel flickers offline and any watching player navigates away.
+// Kept as a safety net in case of brief RTMP hiccups.
 const streamEndTimers = new Map();
 const STREAM_END_GRACE_MS = 15_000;
 
@@ -171,15 +160,9 @@ const nms = new NodeMediaServer({
         hlsFlags: '[hls_time=4:hls_list_size=10:hls_flags=delete_segments]',
         hlsKeep: false,
         dash: false,
-        // Force audio re-encode: fixes slowed-down audio caused by VLC RTMP
-        // timestamp drift being passed through in stream-copy mode.
-        ac: 'aac',
-        acParam: ['-ar', '44100'],
-        // Force CFR video re-encode: fixes stuttering caused by variable frame
-        // timestamps in the RTMP stream. GOP kept at 120 frames (4s @ 30fps)
-        // to stay aligned with HLS segment boundaries.
-        vc: 'libx264',
-        vcParam: ['-vsync', 'cfr', '-r', '30', '-g', '120', '-sc_threshold', '0'],
+        // Stream copy — ffmpeg encodes before pushing RTMP, so no re-encode needed here.
+        vc: 'copy',
+        ac: 'copy',
       },
     ],
   },
@@ -189,7 +172,7 @@ nms.run();
 
 nms.on('prePublish', (id, streamPath, args) => {
   const key = streamPath.split('/').pop();
-  // Cancel any pending removal — stream reconnected (e.g. VLC looping between episodes)
+  // Cancel any pending removal — stream reconnected within grace period
   if (streamEndTimers.has(key)) {
     clearTimeout(streamEndTimers.get(key));
     streamEndTimers.delete(key);
@@ -501,62 +484,56 @@ app.get('/api/show-channels', (req, res) => {
   }
 });
 
-// POST /api/show-channels/:key/launch — build playlist and start VLC
+// POST /api/show-channels/:key/launch — build concat file and start ffmpeg
 app.post('/api/show-channels/:key/launch', (req, res) => {
   const { key } = req.params;
 
-  if (vlcProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
+  if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
 
   const name = getShowFolders().find(n => showNameToKey(n) === key);
   if (!name) return res.status(404).json({ error: 'Show folder not found' });
 
-  const showDir = path.join(SHOWS_DIR, name);
-  const videos  = getVideoFiles(showDir);
+  const showDir    = path.join(SHOWS_DIR, name);
+  const videos     = getVideoFiles(showDir);
   if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
 
-  const playlistPath = buildPlaylist(showDir, videos);
+  const concatPath = buildConcatFile(showDir, videos);
+  const rtmpUrl    = `rtmp://localhost/live/${key}`;
+  const binary     = process.env.FFMPEG_PATH || ffmpegPath;
 
-  const vlcPath = findVlc();
-  if (!vlcPath) {
-    return res.status(500).json({
-      error: 'VLC not found. Set VLC_PATH in your .env (e.g. VLC_PATH=/Applications/VLC.app/Contents/MacOS/VLC)',
-    });
-  }
-  if (path.isAbsolute(vlcPath) && !fs.existsSync(vlcPath)) {
-    return res.status(500).json({ error: `VLC not found at "${vlcPath}". Check your VLC_PATH setting.` });
-  }
-
-  const sout = `#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/${key}}`;
-
-  const proc = spawn(vlcPath, [
-    '--intf', 'dummy',
-    playlistPath,
-    '--sout', sout,
-    '--sout-keep',
-    '--loop',
+  const proc = spawn(binary, [
+    '-re',
+    '-stream_loop', '-1',
+    '-f', 'concat', '-safe', '0',
+    '-i', concatPath,
+    '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'veryfast',
+    '-x264opts', 'keyint=120:min-keyint=120:scenecut=0',
+    '-vf', 'fps=30',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+    '-f', 'flv', rtmpUrl,
   ], { stdio: 'ignore' });
 
   proc.on('error', err => {
-    console.error(`[VLC] Failed to start "${name}":`, err.message);
-    vlcProcesses.delete(key);
+    console.error(`[ffmpeg] Failed to start "${name}":`, err.message);
+    ffmpegProcesses.delete(key);
   });
   proc.on('exit', (code, signal) => {
-    console.log(`[VLC] "${name}" exited (code=${code} signal=${signal})`);
-    vlcProcesses.delete(key);
+    console.log(`[ffmpeg] "${name}" exited (code=${code} signal=${signal})`);
+    ffmpegProcesses.delete(key);
   });
 
-  vlcProcesses.set(key, proc);
-  console.log(`[VLC] Launched "${name}" → rtmp://localhost/live/${key} (pid=${proc.pid})`);
+  ffmpegProcesses.set(key, proc);
+  console.log(`[ffmpeg] Launched "${name}" → ${rtmpUrl} (pid=${proc.pid})`);
   res.json({ success: true, key, pid: proc.pid });
 });
 
-// POST /api/show-channels/:key/stop — kill VLC for this channel
+// POST /api/show-channels/:key/stop — kill ffmpeg for this channel
 app.post('/api/show-channels/:key/stop', (req, res) => {
   const { key }  = req.params;
-  const proc     = vlcProcesses.get(key);
-  if (!proc) return res.status(404).json({ error: 'No VLC process for this channel' });
+  const proc     = ffmpegProcesses.get(key);
+  if (!proc) return res.status(404).json({ error: 'No stream process for this channel' });
   proc.kill('SIGTERM');
-  vlcProcesses.delete(key);
+  ffmpegProcesses.delete(key);
   res.json({ success: true });
 });
 
@@ -569,11 +546,5 @@ app.listen(HTTP_PORT, () => {
 │  RTMP ingest: rtmp://localhost/live/<channel-key>    │
 │  HLS output : /hls/live/<channel-key>/index.m3u8    │
 └──────────────────────────────────────────────────────┘
-
-VLC command (use any name for <channel-key>):
-  vlc <file> \\
-    --sout '#transcode{vcodec=h264,vb=2000,acodec=aac,ab=128,venc=x264{keyint=120,min-keyint=120,scenecut=0}}:standard{access=rtmp,mux=ffmpeg{mux=flv},dst=rtmp://localhost/live/<channel-key>}' \\
-    --loop
-
 `);
 });
