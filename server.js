@@ -9,23 +9,8 @@ const ffmpegPath = require('ffmpeg-static');
 // MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
 const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
 
-// Runtime data lives in data/ so it survives Vite rebuilds that wipe public/
-const DATA_DIR   = path.join(__dirname, 'data');
-const MOVIES_JSON = path.join(DATA_DIR, 'movies.json');
-const TV_JSON     = path.join(DATA_DIR, 'tv.json');
-
-// Ensure data/ exists
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-// One-time migration: move JSON files from old public/ location to data/
-for (const name of ['movies.json', 'tv.json']) {
-  const oldPath = path.join(__dirname, 'public', name);
-  const newPath = path.join(DATA_DIR, name);
-  if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
-    fs.copyFileSync(oldPath, newPath);
-    console.log(`[data] Migrated ${name} from public/ → data/`);
-  }
-}
+// Database (also handles migration from any legacy JSON files)
+const db = require('./db');
 
 // Lazily-initialised MEGA storage session (cached for the process lifetime)
 let _megaStorage = null;
@@ -116,18 +101,9 @@ const app = express();
 
 app.use(express.json());
 
-// Serve runtime JSON data from data/ (survives Vite rebuilds)
-function serveJson(filePath, fallback) {
-  return (_req, res) => {
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      res.json(fallback);
-    }
-  };
-}
-app.get('/movies.json', serveJson(MOVIES_JSON, { movies: [] }));
-app.get('/tv.json',     serveJson(TV_JSON,     { shows:  [] }));
+// Serve catalogue data from the database
+app.get('/movies.json', (_req, res) => res.json({ movies: db.getAllMovies() }));
+app.get('/tv.json',     (_req, res) => res.json({ shows:  db.getAllShows()  }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -204,28 +180,14 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
     if (!match) throw new Error(`Unexpected MEGA link format: ${url}`);
     const embedUrl = match[1]; // "ID#key"
 
-    // Read existing movies.json (or start fresh)
-    let data = { movies: [] };
-    if (fs.existsSync(MOVIES_JSON)) {
-      data = JSON.parse(fs.readFileSync(MOVIES_JSON, 'utf8'));
-    }
-
-    const newId = data.movies.length > 0
-      ? Math.max(...data.movies.map(m => Number(m.id))) + 1
-      : 1;
-
-    const movie = {
-      id:           newId,
+    const movie = db.addMovie({
       title:        title.trim(),
-      director:     (director    || '').trim(),
+      director:     (director   || '').trim(),
       release_year: year ? parseInt(year, 10) : null,
-      genre:        (genre       || '').trim(),
-      poster_url:   (poster_url  || '').trim(),
+      genre:        (genre      || '').trim(),
+      poster_url:   (poster_url || '').trim(),
       embed_url:    embedUrl,
-    };
-
-    data.movies.push(movie);
-    fs.writeFileSync(MOVIES_JSON, JSON.stringify(data, null, 2));
+    });
 
     res.json({ success: true, movie });
   } catch (err) {

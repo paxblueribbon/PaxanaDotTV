@@ -6,5 +6,8 @@ client/public/movies.json
 client/public/tv.json
 *.log
 .env
-# Runtime data — movies.json is auto-generated; tv.json can be committed
+# Runtime data — DB is auto-generated; tv.json can be committed if desired
+data/paxana.db
+data/paxana.db-shm
+data/paxana.db-wal
 data/movies.json
