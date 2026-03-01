@@ -5,6 +5,7 @@ import MediaGrid from './components/MediaGrid'
 import ShowDetail from './components/ShowDetail'
 import MegaPlayer from './components/MegaPlayer'
 import UploadModal from './components/UploadModal'
+import AddShowModal from './components/AddShowModal'
 
 export default function App() {
   const [section, setSection] = useState('movies')
@@ -13,7 +14,9 @@ export default function App() {
   const [activeShow, setActiveShow] = useState(null)
   const [activeEpisode, setActiveEpisode] = useState(null) // { ep, seasonNum }
   const [showUpload, setShowUpload] = useState(false)
+  const [showAddShow, setShowAddShow] = useState(false)
   const [moviesRefreshKey, setMoviesRefreshKey] = useState(0)
+  const [tvRefreshKey, setTvRefreshKey] = useState(0)
 
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
 
@@ -36,6 +39,11 @@ export default function App() {
   function handleUploadSuccess() {
     setShowUpload(false)
     setMoviesRefreshKey(k => k + 1)
+  }
+
+  function handleAddShowSuccess() {
+    setShowAddShow(false)
+    setTvRefreshKey(k => k + 1)
   }
 
   let view
@@ -73,7 +81,7 @@ export default function App() {
   } else if (section === 'movies') {
     view = <MediaGrid key={moviesRefreshKey} section="movies" dataKey="movies" onSelect={setActiveMovie} />
   } else {
-    view = <MediaGrid section="tv" dataKey="shows" onSelect={setActiveShow} />
+    view = <MediaGrid key={tvRefreshKey} section="tv" dataKey="shows" onSelect={setActiveShow} />
   }
 
   return (
@@ -94,10 +102,21 @@ export default function App() {
         <button id="upload-btn" onClick={() => setShowUpload(true)} title="Add movie">+</button>
       )}
 
+      {!inDetail && section === 'tv' && (
+        <button id="upload-btn" onClick={() => setShowAddShow(true)} title="Add show">+</button>
+      )}
+
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
           onSuccess={handleUploadSuccess}
+        />
+      )}
+
+      {showAddShow && (
+        <AddShowModal
+          onClose={() => setShowAddShow(false)}
+          onSuccess={handleAddShowSuccess}
         />
       )}
 

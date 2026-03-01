@@ -204,4 +204,34 @@ function updateEpisodeUrl(id, embedUrl) {
   return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
 }
 
-module.exports = { getAllMovies, addMovie, getAllShows, updateEpisodeUrl, importFromJson };
+// showData: { title, channel, description, image_url }
+// seasons:  [{ season_number, episodes: [{ episode_number, name }] }]
+function addShowWithEpisodes(showData, seasons) {
+  return db.transaction(() => {
+    const { lastInsertRowid: showId } = db.prepare(`
+      INSERT INTO shows (title, channel, description, image_url)
+      VALUES (@title, @channel, @description, @image_url)
+    `).run(showData);
+
+    const insEp = db.prepare(`
+      INSERT INTO episodes (show_id, season, episode_number, episode_title, embed_url)
+      VALUES (@show_id, @season, @episode_number, @episode_title, @embed_url)
+    `);
+
+    for (const { season_number, episodes } of seasons) {
+      for (const ep of episodes) {
+        insEp.run({
+          show_id:        showId,
+          season:         season_number,
+          episode_number: ep.episode_number,
+          episode_title:  ep.name || '',
+          embed_url:      '',
+        });
+      }
+    }
+
+    return db.prepare('SELECT * FROM shows WHERE id = ?').get(showId);
+  })();
+}
+
+module.exports = { getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson };

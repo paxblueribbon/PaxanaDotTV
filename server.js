@@ -2,6 +2,7 @@ const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const crypto = require('crypto');
 const multer = require('multer');
 const { Storage } = require('megajs');
@@ -37,6 +38,26 @@ function requireAuth(req, res, next) {
 
 // MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
 const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
+
+// ── TMDB helper ───────────────────────────────────────────────────────────────
+function tmdbGet(apiPath) {
+  const key = process.env.TMDB_API_KEY;
+  if (!key) return Promise.reject(new Error('TMDB_API_KEY not set'));
+  return new Promise((resolve, reject) => {
+    const url = `https://api.themoviedb.org/3${apiPath}?api_key=${key}`;
+    https.get(url, { headers: { Accept: 'application/json' } }, res => {
+      let raw = '';
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(raw);
+          if (data.success === false) reject(new Error(data.status_message || 'TMDB error'));
+          else resolve(data);
+        } catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
 
 // Database (also handles migration from any legacy JSON files)
 const db = require('./db');
@@ -304,6 +325,38 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
+  }
+});
+
+// ── Add show from TMDB ────────────────────────────────────────────────────────
+// POST /api/shows   body: { tmdb_id }
+app.post('/api/shows', async (req, res) => {
+  const tmdbId = String(req.body.tmdb_id || '').trim();
+  if (!tmdbId) return res.status(400).json({ error: 'tmdb_id is required' });
+
+  try {
+    // Fetch show info
+    const info = await tmdbGet(`/tv/${tmdbId}`);
+
+    const showData = {
+      title:       info.name,
+      channel:     info.networks?.[0]?.name || '',
+      description: info.overview || '',
+      image_url:   info.poster_path
+        ? `https://image.tmdb.org/t/p/w500${info.poster_path}`
+        : '',
+    };
+
+    // Fetch episodes for every season (skip season 0 — specials)
+    const regularSeasons = (info.seasons || []).filter(s => s.season_number > 0);
+    const seasons = await Promise.all(
+      regularSeasons.map(s => tmdbGet(`/tv/${tmdbId}/season/${s.season_number}`))
+    );
+
+    const show = db.addShowWithEpisodes(showData, seasons);
+    res.json({ success: true, show });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
