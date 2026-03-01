@@ -324,3 +324,128 @@ footer {
   color: #555;
   letter-spacing: 0.05em;
 }
+
+/* ── Show detail view ── */
+#show-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: min(900px, 96vw);
+}
+
+#show-header {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+#show-poster {
+  flex-shrink: 0;
+  width: 100px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border: 1px solid #222;
+}
+
+#show-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#show-title {
+  font-size: 1rem;
+  color: #ddd;
+}
+
+#show-channel {
+  font-size: 0.7rem;
+  color: #555;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#show-desc {
+  font-size: 0.75rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+#season-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid #222;
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
+
+#season-tabs button {
+  background: none;
+  border: none;
+  border-right: 1px solid #222;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+#season-tabs button:last-child { border-right: none; }
+#season-tabs button:hover { color: #ccc; background: #111; }
+#season-tabs button.active { color: #fff; background: #181818; }
+
+#episode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.episode-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: #111;
+  border: 1px solid #222;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.episode-item:hover {
+  background: #181818;
+  border-color: #444;
+}
+
+.episode-item.unavailable {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.episode-item.unavailable:hover {
+  background: #111;
+  border-color: #222;
+}
+
+.ep-num {
+  font-size: 0.65rem;
+  color: #555;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  width: 2.5rem;
+}
+
+.ep-title {
+  font-size: 0.8rem;
+  color: #ccc;
+  flex: 1;
+  line-height: 1.3;
+}
+
+.ep-watch {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: #555;
+  flex-shrink: 0;
+}

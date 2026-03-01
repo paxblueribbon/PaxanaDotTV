@@ -2,20 +2,64 @@ import { useState } from 'react'
 import ChannelList from './components/ChannelList'
 import Player from './components/Player'
 import MediaGrid from './components/MediaGrid'
+import ShowDetail from './components/ShowDetail'
 import MegaPlayer from './components/MegaPlayer'
 
 export default function App() {
-  const [activeKey, setActiveKey] = useState(null)
   const [section, setSection] = useState('live')
-  const [activeMedia, setActiveMedia] = useState(null)
+  const [activeKey, setActiveKey] = useState(null)
+  const [activeMovie, setActiveMovie] = useState(null)
+  const [activeShow, setActiveShow] = useState(null)
+  const [activeEpisode, setActiveEpisode] = useState(null) // { ep, seasonNum }
 
-  const inPlayer = activeKey || activeMedia
+  const inDetail = activeKey || activeMovie || activeShow || activeEpisode
+
+  function handleEpisodeSelect(ep, seasonNum) {
+    setActiveEpisode({ ep, seasonNum })
+  }
+
+  let view
+  if (activeKey) {
+    view = <Player channelKey={activeKey} onBack={() => setActiveKey(null)} />
+  } else if (activeMovie) {
+    view = (
+      <MegaPlayer
+        title={activeMovie.title}
+        subtitle={`${activeMovie.director} · ${activeMovie.release_year} · ${activeMovie.genre}`}
+        embedUrl={activeMovie.embed_url}
+        onBack={() => setActiveMovie(null)}
+      />
+    )
+  } else if (activeEpisode) {
+    view = (
+      <MegaPlayer
+        title={activeShow.title}
+        subtitle={`S${activeEpisode.seasonNum} E${activeEpisode.ep.episode_number} · ${activeEpisode.ep.episode_title}`}
+        embedUrl={activeEpisode.ep.embed_url}
+        onBack={() => setActiveEpisode(null)}
+      />
+    )
+  } else if (activeShow) {
+    view = (
+      <ShowDetail
+        show={activeShow}
+        onSelect={handleEpisodeSelect}
+        onBack={() => setActiveShow(null)}
+      />
+    )
+  } else if (section === 'live') {
+    view = <ChannelList onWatch={setActiveKey} />
+  } else if (section === 'movies') {
+    view = <MediaGrid section="movies" dataKey="movies" onSelect={setActiveMovie} />
+  } else {
+    view = <MediaGrid section="tv" dataKey="shows" onSelect={setActiveShow} />
+  }
 
   return (
     <>
       <header><span>Paxana</span>.TV</header>
 
-      {!inPlayer && (
+      {!inDetail && (
         <nav id="section-nav">
           <button className={section === 'live' ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
           <button className={section === 'movies' ? 'active' : ''} onClick={() => setSection('movies')}>Movies</button>
@@ -23,14 +67,7 @@ export default function App() {
         </nav>
       )}
 
-      {activeKey
-        ? <Player channelKey={activeKey} onBack={() => setActiveKey(null)} />
-        : activeMedia
-          ? <MegaPlayer item={activeMedia} onBack={() => setActiveMedia(null)} />
-          : section === 'live'
-            ? <ChannelList onWatch={setActiveKey} />
-            : <MediaGrid section={section} onSelect={setActiveMedia} />
-      }
+      {view}
 
       <footer>tune in. sit back. enjoy.</footer>
     </>

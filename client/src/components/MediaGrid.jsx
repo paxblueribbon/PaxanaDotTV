@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 
-export default function MediaGrid({ section, onSelect }) {
+export default function MediaGrid({ section, dataKey, onSelect }) {
   const [items, setItems] = useState([])
 
   useEffect(() => {
     fetch(`/${section}.json`)
       .then(r => r.json())
-      .then(data => setItems(data[section] ?? []))
+      .then(data => setItems(data[dataKey] ?? []))
       .catch(() => setItems([]))
-  }, [section])
+  }, [section, dataKey])
+
+  const getImage = item => item.poster_url || item.image_url
+  const getSub   = item => item.release_year || item.channel || ''
 
   return (
     <div id="media-grid-view">
@@ -18,11 +21,11 @@ export default function MediaGrid({ section, onSelect }) {
             {items.map(item => (
               <div key={item.id} className="media-card" onClick={() => onSelect(item)}>
                 <div className="poster-wrap">
-                  <img src={item.poster_url} alt={item.title} loading="lazy" />
+                  <img src={getImage(item)} alt={item.title} loading="lazy" />
                 </div>
                 <div className="media-info">
                   <span className="media-title">{item.title}</span>
-                  <span className="media-year">{item.release_year}</span>
+                  <span className="media-year">{getSub(item)}</span>
                 </div>
               </div>
             ))}

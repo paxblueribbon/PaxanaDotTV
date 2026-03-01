@@ -1,21 +1,25 @@
-export default function MegaPlayer({ item, onBack }) {
-  const embedUrl = `https://mega.nz/embed/${item.embed_url}`
+function buildEmbedUrl(raw) {
+  const s = raw.trim()
+  if (s.startsWith('https://')) return s
+  return `https://mega.nz/embed/${s}`
+}
 
+export default function MegaPlayer({ title, subtitle, embedUrl, onBack }) {
   return (
     <div id="mega-player-view">
       <button id="back-btn" onClick={onBack}>← back</button>
       <div id="mega-stage">
         <iframe
-          src={embedUrl}
-          title={item.title}
+          src={buildEmbedUrl(embedUrl)}
+          title={title}
           allowFullScreen
           allow="autoplay"
           frameBorder="0"
         />
       </div>
       <div id="mega-meta">
-        <span id="mega-title">{item.title}</span>
-        <span id="mega-sub">{item.director} · {item.release_year} · {item.genre}</span>
+        <span id="mega-title">{title}</span>
+        <span id="mega-sub">{subtitle}</span>
       </div>
     </div>
   )
