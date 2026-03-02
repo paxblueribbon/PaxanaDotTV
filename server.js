@@ -363,6 +363,11 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
   if (!title)    return res.status(400).json({ error: 'Title is required' });
 
+  if (!process.env.MEGA_EMAIL || !process.env.MEGA_PASSWORD) {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+    return res.status(503).json({ error: 'MEGA credentials not configured — set MEGA_EMAIL and MEGA_PASSWORD, or use the "mega link / id" tab instead' });
+  }
+
   const uploadPath = req.file.path;
   let   convertedPath = null;
 
@@ -403,7 +408,10 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   } catch (err) {
     // Reset cached session so the next request gets a fresh one
     _megaStorage = null;
-    res.status(500).json({ error: err.message });
+    const msg = err.message === 'fetch failed'
+      ? 'Could not reach MEGA — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials'
+      : err.message;
+    res.status(500).json({ error: msg });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
     if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
@@ -514,6 +522,11 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
   if (!id) return res.status(400).json({ error: 'Invalid episode id' });
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
+  if (!process.env.MEGA_EMAIL || !process.env.MEGA_PASSWORD) {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+    return res.status(503).json({ error: 'MEGA credentials not configured — set MEGA_EMAIL and MEGA_PASSWORD, or use the "mega link / id" tab instead' });
+  }
+
   const uploadPath = req.file.path;
   let   convertedPath = null;
 
@@ -544,7 +557,10 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
     res.json({ success: true, episode });
   } catch (err) {
     _megaStorage = null;
-    res.status(500).json({ error: err.message });
+    const msg = err.message === 'fetch failed'
+      ? 'Could not reach MEGA — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials'
+      : err.message;
+    res.status(500).json({ error: msg });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
     if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
