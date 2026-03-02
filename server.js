@@ -409,8 +409,9 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   } catch (err) {
     // Reset cached session so the next request gets a fresh one
     _megaStorage = null;
+    const cause = err.cause?.message || err.cause?.code;
     const msg = err.message === 'fetch failed'
-      ? 'Could not reach MEGA — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials'
+      ? `Could not reach MEGA${cause ? ` (${cause})` : ''} — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials`
       : err.message;
     res.status(500).json({ error: msg });
   } finally {
@@ -558,8 +559,9 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
     res.json({ success: true, episode });
   } catch (err) {
     _megaStorage = null;
+    const cause = err.cause?.message || err.cause?.code;
     const msg = err.message === 'fetch failed'
-      ? 'Could not reach MEGA — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials'
+      ? `Could not reach MEGA${cause ? ` (${cause})` : ''} — check network access and your MEGA_EMAIL / MEGA_PASSWORD credentials`
       : err.message;
     res.status(500).json({ error: msg });
   } finally {
