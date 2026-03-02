@@ -409,6 +409,24 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   }
 });
 
+// ── TMDB movie lookup ─────────────────────────────────────────────────────────
+// GET /api/tmdb/movie/:tmdbId — returns pre-formatted fields for the upload modal
+app.get('/api/tmdb/movie/:tmdbId', requireAuth, async (req, res) => {
+  try {
+    const info = await tmdbGet(`/movie/${req.params.tmdbId}?append_to_response=credits`);
+    const director = (info.credits?.crew || []).find(c => c.job === 'Director')?.name || '';
+    res.json({
+      title:      info.title || '',
+      director,
+      year:       info.release_date ? info.release_date.slice(0, 4) : '',
+      genre:      (info.genres || []).map(g => g.name).join(', '),
+      poster_url: info.poster_path ? `https://image.tmdb.org/t/p/w500${info.poster_path}` : '',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Add show from TMDB ────────────────────────────────────────────────────────
 // POST /api/shows   body: { tmdb_id }
 app.post('/api/shows', async (req, res) => {

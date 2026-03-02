@@ -693,6 +693,28 @@ footer {
 #file-label.has-file { color: #aaa; border-color: #333; border-style: solid; }
 #file-label input[type="file"] { display: none; }
 
+.tmdb-row {
+  display: flex;
+  gap: 0.4rem;
+}
+.tmdb-row input { flex: 1; }
+
+.tmdb-lookup-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #666;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 0 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.tmdb-lookup-btn:hover:not(:disabled) { color: #ccc; border-color: #555; }
+.tmdb-lookup-btn:disabled { opacity: 0.35; cursor: default; }
+
 #upload-form input[type="text"],
 #upload-form input[type="number"],
 #upload-form input[type="url"] {
