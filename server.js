@@ -410,6 +410,32 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   }
 });
 
+// ── Movie from MEGA URL ───────────────────────────────────────────────────────
+// POST /api/movies/from-url  application/json
+//   embed_url  – full MEGA URL or bare ID#key (required)
+//   title      – movie title (required)
+//   director, year, genre, poster_url – optional metadata
+app.post('/api/movies/from-url', requireAuth, express.json(), (req, res) => {
+  const { title, director, year, genre, poster_url, embed_url } = req.body;
+  if (!title)     return res.status(400).json({ error: 'Title is required' });
+  if (!embed_url) return res.status(400).json({ error: 'embed_url is required' });
+
+  const megaId = extractMegaId(embed_url.trim()) || embed_url.trim();
+  try {
+    const movie = db.addMovie({
+      title:        title.trim(),
+      director:     (director   || '').trim(),
+      release_year: year ? parseInt(year, 10) : null,
+      genre:        (genre      || '').trim(),
+      poster_url:   (poster_url || '').trim(),
+      embed_url:    megaId,
+    });
+    res.json({ success: true, movie });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── TMDB movie lookup ─────────────────────────────────────────────────────────
 // GET /api/tmdb/movie/:tmdbId — returns pre-formatted fields for the upload modal
 app.get('/api/tmdb/movie/:tmdbId', requireAuth, async (req, res) => {

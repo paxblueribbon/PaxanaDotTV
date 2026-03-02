@@ -29,8 +29,10 @@ function xhrUpload(url, body, onProgress, onServerReceived) {
 }
 
 export default function UploadModal({ onClose, onSuccess }) {
+  const [mode, setMode]         = useState('upload') // 'upload' | 'url'
   const [fields, setFields]     = useState({ title: '', director: '', year: '', genre: '', poster_url: '' })
   const [file, setFile]         = useState(null)
+  const [megaUrl, setMegaUrl]   = useState('')
   const [status, setStatus]     = useState('idle') // idle | looking-up | uploading | error
   const [errorMsg, setErrorMsg] = useState('')
   const [tmdbId, setTmdbId]     = useState('')
@@ -66,7 +68,28 @@ export default function UploadModal({ onClose, onSuccess }) {
     }
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmitUrl(e) {
+    e.preventDefault()
+    if (!megaUrl.trim())      return setErrorMsg('Paste a MEGA link or bare ID#key.')
+    if (!fields.title.trim()) return setErrorMsg('Title is required.')
+    setStatus('uploading')
+    setErrorMsg('')
+    try {
+      const res  = await fetch('/api/movies/from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...fields, embed_url: megaUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save')
+      onSuccess(data.movie)
+    } catch (err) {
+      setErrorMsg(err.message)
+      setStatus('error')
+    }
+  }
+
+  async function handleSubmitFile(e) {
     e.preventDefault()
     if (!file)                return setErrorMsg('Select a video file first.')
     if (!fields.title.trim()) return setErrorMsg('Title is required.')
@@ -102,17 +125,47 @@ export default function UploadModal({ onClose, onSuccess }) {
           <button id="modal-close" onClick={onClose} disabled={busy}>✕</button>
         </div>
 
-        <form id="upload-form" onSubmit={handleSubmit}>
-          <label id="file-label" className={file ? 'has-file' : ''}>
+        <div id="ep-mode-tabs">
+          <button
+            className={`ep-mode-btn${mode === 'url'    ? ' active' : ''}`}
+            onClick={() => { setMode('url');    setErrorMsg('') }}
+            disabled={busy}
+          >mega link / id</button>
+          <button
+            className={`ep-mode-btn${mode === 'upload' ? ' active' : ''}`}
+            onClick={() => { setMode('upload'); setErrorMsg('') }}
+            disabled={busy}
+          >upload file</button>
+        </div>
+
+        <form id="upload-form" onSubmit={mode === 'url' ? handleSubmitUrl : handleSubmitFile}>
+          {mode === 'url' && (
             <input
-              ref={fileRef}
-              type="file"
-              accept="video/*,.mkv"
-              onChange={e => setFile(e.target.files[0] || null)}
+              type="text"
+              placeholder="https://mega.nz/file/… or ID#key"
+              value={megaUrl}
+              onChange={e => {
+                const val = e.target.value
+                const m = val.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/)
+                setMegaUrl(m ? m[1] : val)
+              }}
               disabled={busy}
+              autoComplete="off"
             />
-            {file ? file.name : 'choose video file'}
-          </label>
+          )}
+
+          {mode === 'upload' && (
+            <label id="file-label" className={file ? 'has-file' : ''}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*,.mkv"
+                onChange={e => setFile(e.target.files[0] || null)}
+                disabled={busy}
+              />
+              {file ? file.name : 'choose video file'}
+            </label>
+          )}
 
           <div className="tmdb-row">
             <input
@@ -148,7 +201,7 @@ export default function UploadModal({ onClose, onSuccess }) {
 
           {errorMsg && <p id="upload-error">{errorMsg}</p>}
 
-          {status === 'uploading' && (
+          {busy && mode === 'upload' && (
             <div id="upload-progress-wrap">
               <div
                 id="upload-progress-bar"
@@ -160,11 +213,16 @@ export default function UploadModal({ onClose, onSuccess }) {
               </span>
             </div>
           )}
+          {busy && mode === 'url' && (
+            <p id="upload-status">saving…</p>
+          )}
 
           <div id="modal-actions">
             <button type="button" onClick={onClose} disabled={busy}>cancel</button>
             <button type="submit" id="upload-submit" disabled={busy}>
-              {busy ? 'uploading…' : 'upload'}
+              {busy
+                ? (mode === 'upload' ? 'uploading…' : 'saving…')
+                : (mode === 'upload' ? 'upload' : 'save')}
             </button>
           </div>
         </form>
