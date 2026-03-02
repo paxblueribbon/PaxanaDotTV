@@ -37,8 +37,16 @@ function requireAuth(req, res, next) {
   res.redirect('/login');
 }
 
-// MEGA folder name (no leading slash) — override with MEGA_FOLDER env var
-const MEGA_FOLDER_NAME = (process.env.MEGA_FOLDER || 'Movies').replace(/^\/+/, '');
+// Walks (or creates) a chain of MEGA directories and returns the deepest node.
+async function getMegaSubfolder(storage, ...parts) {
+  let node = storage.root;
+  for (const name of parts) {
+    let child = (node.children || []).find(f => f.directory && f.name === name);
+    if (!child) child = await node.mkdir(name);
+    node = child;
+  }
+  return node;
+}
 
 // ── Show streaming ─────────────────────────────────────────────────────────────
 const SHOWS_DIR  = path.join(__dirname, 'shows');
@@ -339,13 +347,7 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   try {
     const storage = await getMegaStorage();
 
-    // Find or create the uploads folder under root
-    let folder = (storage.root.children || []).find(
-      f => f.directory && f.name === MEGA_FOLDER_NAME
-    );
-    if (!folder) folder = await storage.root.mkdir(MEGA_FOLDER_NAME);
-
-    // Stream the file to MEGA; name it after the movie title
+    const folder   = await getMegaSubfolder(storage, 'Videos', 'Movies');
     const ext      = path.extname(req.file.filename);
     const safeName = title.trim().replace(/[^\w\s.()\-]/g, '').replace(/\s+/g, '_') + ext;
     const { size } = fs.statSync(uploadPath);
@@ -354,7 +356,7 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
       fs.createReadStream(uploadPath)
     ).complete;
 
-    console.log(`[MEGA] Uploaded: ${MEGA_FOLDER_NAME}/${safeName}`);
+    console.log(`[MEGA] Uploaded: Videos/Movies/${safeName}`);
 
     // Get public share link → 'https://mega.nz/file/ID#key'
     const url      = await megaFile.link();
@@ -445,11 +447,7 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
   try {
     const storage = await getMegaStorage();
 
-    let folder = (storage.root.children || []).find(
-      f => f.directory && f.name === MEGA_FOLDER_NAME
-    );
-    if (!folder) folder = await storage.root.mkdir(MEGA_FOLDER_NAME);
-
+    const folder   = await getMegaSubfolder(storage, 'Videos', 'TV');
     const ext      = path.extname(req.file.filename);
     const safeName = `ep_${id}_${Date.now()}${ext}`;
     const { size } = fs.statSync(uploadPath);
@@ -458,7 +456,7 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
       fs.createReadStream(uploadPath)
     ).complete;
 
-    console.log(`[MEGA] Uploaded episode: ${MEGA_FOLDER_NAME}/${safeName}`);
+    console.log(`[MEGA] Uploaded episode: Videos/TV/${safeName}`);
 
     const url    = await megaFile.link();
     const megaId = extractMegaId(url);
