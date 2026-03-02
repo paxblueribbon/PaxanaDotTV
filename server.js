@@ -126,6 +126,26 @@ async function getMegaStorage() {
   return _megaStorage;
 }
 
+// Remuxes an MKV into an MP4 container using stream-copy (no re-encode).
+// Returns the path of the new .mp4 temp file.
+function convertToMp4(inputPath) {
+  return new Promise((resolve, reject) => {
+    const outputPath = inputPath.replace(/\.[^.]+$/, '_converted.mp4');
+    const binary = process.env.FFMPEG_PATH || ffmpegPath;
+    const proc = spawn(binary, [
+      '-i', inputPath,
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      '-y', outputPath,
+    ], { stdio: 'ignore' });
+    proc.on('error', reject);
+    proc.on('exit', code => {
+      if (code === 0) resolve(outputPath);
+      else reject(new Error(`ffmpeg MKV→MP4 conversion failed (exit ${code})`));
+    });
+  });
+}
+
 const uploadStorage = multer.diskStorage({
   destination: '/tmp',
   filename: (_req, file, cb) => {
@@ -343,17 +363,23 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
   if (!title)    return res.status(400).json({ error: 'Title is required' });
 
   const uploadPath = req.file.path;
+  let   convertedPath = null;
 
   try {
-    const storage = await getMegaStorage();
+    const isMkv    = path.extname(req.file.filename).toLowerCase() === '.mkv';
+    if (isMkv) {
+      console.log(`[MEGA] Converting MKV→MP4: ${req.file.filename}`);
+      convertedPath = await convertToMp4(uploadPath);
+    }
+    const filePath = convertedPath || uploadPath;
 
+    const storage  = await getMegaStorage();
     const folder   = await getMegaSubfolder(storage, 'Videos', 'Movies');
-    const ext      = path.extname(req.file.filename);
-    const safeName = title.trim().replace(/[^\w\s.()\-]/g, '').replace(/\s+/g, '_') + ext;
-    const { size } = fs.statSync(uploadPath);
+    const safeName = title.trim().replace(/[^\w\s.()\-]/g, '').replace(/\s+/g, '_') + '.mp4';
+    const { size } = fs.statSync(filePath);
     const megaFile = await folder.upload(
       { name: safeName, size },
-      fs.createReadStream(uploadPath)
+      fs.createReadStream(filePath)
     ).complete;
 
     console.log(`[MEGA] Uploaded: Videos/Movies/${safeName}`);
@@ -379,6 +405,7 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
+    if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
   }
 });
 
@@ -443,17 +470,23 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
   const uploadPath = req.file.path;
+  let   convertedPath = null;
 
   try {
-    const storage = await getMegaStorage();
+    const isMkv = path.extname(req.file.filename).toLowerCase() === '.mkv';
+    if (isMkv) {
+      console.log(`[MEGA] Converting MKV→MP4: ${req.file.filename}`);
+      convertedPath = await convertToMp4(uploadPath);
+    }
+    const filePath = convertedPath || uploadPath;
 
+    const storage  = await getMegaStorage();
     const folder   = await getMegaSubfolder(storage, 'Videos', 'TV');
-    const ext      = path.extname(req.file.filename);
-    const safeName = `ep_${id}_${Date.now()}${ext}`;
-    const { size } = fs.statSync(uploadPath);
+    const safeName = `ep_${id}_${Date.now()}.mp4`;
+    const { size } = fs.statSync(filePath);
     const megaFile = await folder.upload(
       { name: safeName, size },
-      fs.createReadStream(uploadPath)
+      fs.createReadStream(filePath)
     ).complete;
 
     console.log(`[MEGA] Uploaded episode: Videos/TV/${safeName}`);
@@ -469,6 +502,7 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
     res.status(500).json({ error: err.message });
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
+    if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
   }
 });
 
