@@ -48,6 +48,7 @@ export default function Player({ channelKey, onBack }) {
   const retryTimerRef = useRef(null)
   const mountedRef    = useRef(true)
   const retriesRef    = useRef(0)
+  const lastVolumeRef = useRef(1)
 
   const [status, setStatus]           = useState('connecting') // 'connecting' | 'live' | 'interrupted' | 'ended'
   const [volume, setVolume]           = useState(1)
@@ -62,16 +63,24 @@ export default function Player({ channelKey, onBack }) {
   function handleMuteToggle() {
     const video = videoRef.current
     if (!video) return
-    const newMuted = !muted
-    video.muted = newMuted
-    if (!newMuted && volume === 0) { video.volume = 1; setVolume(1) }
-    setMuted(newMuted)
+    if (muted) {
+      const restore = lastVolumeRef.current
+      video.volume = restore
+      video.muted  = false
+      setVolume(restore)
+      setMuted(false)
+    } else {
+      lastVolumeRef.current = volume > 0 ? volume : 1
+      video.muted = true
+      setMuted(true)
+    }
   }
 
   function handleVolumeChange(e) {
     const v = parseFloat(e.target.value)
     const video = videoRef.current
     if (!video) return
+    if (v > 0) lastVolumeRef.current = v
     video.volume = v
     video.muted  = v === 0
     setVolume(v)

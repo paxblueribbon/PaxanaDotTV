@@ -71,7 +71,7 @@ function buildConcatFile(showDir, videoFiles) {
   const concatPath = path.join(showDir, 'concat.txt');
   const lines = [
     'ffconcat version 1.0',
-    ...videoFiles.map(f => `file '${path.join(showDir, f).replace(/'/g, "'\\''")}'`),
+    ...videoFiles.map(f => `file '${path.join(showDir, f).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`),
   ];
   fs.writeFileSync(concatPath, lines.join('\n') + '\n', 'utf8');
   return concatPath;
@@ -99,6 +99,13 @@ function tmdbGet(apiPath) {
 
 // Database (also handles migration from any legacy JSON files)
 const db = require('./db');
+
+// Extracts the bare 'ID#key' from a full MEGA URL, or returns null for unrecognised input.
+// Handles mega.nz/file/…, mega.nz/embed/…, and legacy mega.nz/#!/… formats.
+function extractMegaId(url) {
+  const match = url.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/);
+  return match ? match[1] : null;
+}
 
 // Lazily-initialised MEGA storage session (cached for the process lifetime)
 let _megaStorage = null;
@@ -350,10 +357,9 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
     console.log(`[MEGA] Uploaded: ${MEGA_FOLDER_NAME}/${safeName}`);
 
     // Get public share link → 'https://mega.nz/file/ID#key'
-    const url   = await megaFile.link();
-    const match = url.match(/mega\.nz\/(?:file|#!)\/([^\s]+)/);
-    if (!match) throw new Error(`Unexpected MEGA link format: ${url}`);
-    const embedUrl = match[1]; // "ID#key"
+    const url      = await megaFile.link();
+    const embedUrl = extractMegaId(url);
+    if (!embedUrl) throw new Error(`Unexpected MEGA link format: ${url}`);
 
     const movie = db.addMovie({
       title:        title.trim(),
@@ -417,8 +423,8 @@ app.patch('/api/episodes/:id', (req, res) => {
 
   // Accept full MEGA URL (https://mega.nz/file/ID#key) or bare ID#key
   embed_url = embed_url.trim();
-  const match = embed_url.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/);
-  if (match) embed_url = match[1];
+  const megaId = extractMegaId(embed_url);
+  if (megaId) embed_url = megaId;
 
   try {
     const episode = db.updateEpisodeUrl(id, embed_url);
@@ -454,11 +460,11 @@ app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => 
 
     console.log(`[MEGA] Uploaded episode: ${MEGA_FOLDER_NAME}/${safeName}`);
 
-    const url   = await megaFile.link();
-    const match = url.match(/mega\.nz\/(?:file|#!)\/([^\s]+)/);
-    if (!match) throw new Error(`Unexpected MEGA link format: ${url}`);
+    const url    = await megaFile.link();
+    const megaId = extractMegaId(url);
+    if (!megaId) throw new Error(`Unexpected MEGA link format: ${url}`);
 
-    const episode = db.updateEpisodeUrl(id, match[1]);
+    const episode = db.updateEpisodeUrl(id, megaId);
     res.json({ success: true, episode });
   } catch (err) {
     _megaStorage = null;
@@ -514,8 +520,17 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
     '-f', 'flv', rtmpUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
+  let stderrBuf = '';
   proc.stderr.on('data', chunk => {
-    process.stderr.write(`[ffmpeg/${key}] ${chunk}`);
+    stderrBuf += chunk.toString('utf8');
+    let nl;
+    while ((nl = stderrBuf.indexOf('\n')) !== -1) {
+      process.stderr.write(`[ffmpeg/${key}] ${stderrBuf.slice(0, nl + 1)}`);
+      stderrBuf = stderrBuf.slice(nl + 1);
+    }
+  });
+  proc.stderr.on('end', () => {
+    if (stderrBuf) process.stderr.write(`[ffmpeg/${key}] ${stderrBuf}\n`);
   });
 
   proc.on('error', err => {
