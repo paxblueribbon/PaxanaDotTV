@@ -1,3 +1,4 @@
+require('dotenv').config();
 const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
