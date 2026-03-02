@@ -90,7 +90,8 @@ function tmdbGet(apiPath) {
   const key = process.env.TMDB_API_KEY;
   if (!key) return Promise.reject(new Error('TMDB_API_KEY not set'));
   return new Promise((resolve, reject) => {
-    const url = `https://api.themoviedb.org/3${apiPath}?api_key=${key}`;
+    const sep = apiPath.includes('?') ? '&' : '?';
+    const url = `https://api.themoviedb.org/3${apiPath}${sep}api_key=${key}`;
     https.get(url, { headers: { Accept: 'application/json' } }, res => {
       let raw = '';
       res.on('data', chunk => { raw += chunk; });
