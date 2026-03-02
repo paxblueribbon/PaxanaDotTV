@@ -8,12 +8,33 @@ const FIELDS = [
   { name: 'poster_url', label: 'poster url',  type: 'url',    required: false },
 ]
 
+function xhrUpload(url, body, onProgress, onServerReceived) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.upload.onload = () => onServerReceived()
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText)
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data)
+        else reject(new Error(data.error || 'Upload failed'))
+      } catch { reject(new Error('Upload failed')) }
+    }
+    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.send(body)
+  })
+}
+
 export default function UploadModal({ onClose, onSuccess }) {
   const [fields, setFields]     = useState({ title: '', director: '', year: '', genre: '', poster_url: '' })
   const [file, setFile]         = useState(null)
   const [status, setStatus]     = useState('idle') // idle | looking-up | uploading | error
   const [errorMsg, setErrorMsg] = useState('')
   const [tmdbId, setTmdbId]     = useState('')
+  const [progress, setProgress] = useState(null)  // null | 0-100 | 'mega'
   const fileRef = useRef()
 
   const busy = status === 'uploading'
@@ -51,6 +72,7 @@ export default function UploadModal({ onClose, onSuccess }) {
     if (!fields.title.trim()) return setErrorMsg('Title is required.')
 
     setStatus('uploading')
+    setProgress(0)
     setErrorMsg('')
 
     const body = new FormData()
@@ -58,13 +80,17 @@ export default function UploadModal({ onClose, onSuccess }) {
     Object.entries(fields).forEach(([k, v]) => body.append(k, v))
 
     try {
-      const res  = await fetch('/api/movies', { method: 'POST', body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      const data = await xhrUpload(
+        '/api/movies',
+        body,
+        pct => setProgress(pct),
+        () => setProgress('mega'),
+      )
       onSuccess(data.movie)
     } catch (err) {
       setErrorMsg(err.message)
       setStatus('error')
+      setProgress(null)
     }
   }
 
@@ -123,7 +149,16 @@ export default function UploadModal({ onClose, onSuccess }) {
           {errorMsg && <p id="upload-error">{errorMsg}</p>}
 
           {status === 'uploading' && (
-            <p id="upload-status">uploading to MEGA — this may take a while for large files…</p>
+            <div id="upload-progress-wrap">
+              <div
+                id="upload-progress-bar"
+                className={progress === 'mega' ? 'indeterminate' : ''}
+                style={progress !== 'mega' ? { width: `${progress}%` } : {}}
+              />
+              <span id="upload-progress-label">
+                {progress === 'mega' ? 'uploading to MEGA…' : `uploading… ${progress}%`}
+              </span>
+            </div>
           )}
 
           <div id="modal-actions">

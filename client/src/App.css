@@ -744,6 +744,39 @@ footer {
   font-style: italic;
 }
 
+#upload-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#upload-progress-bar {
+  height: 2px;
+  background: #444;
+  border-radius: 1px;
+  width: 0%;
+  transition: width 0.25s ease;
+}
+
+#upload-progress-bar.indeterminate {
+  width: 100% !important;
+  background: linear-gradient(90deg, transparent 0%, #666 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: progress-sweep 1.4s linear infinite;
+}
+
+@keyframes progress-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+#upload-progress-label {
+  font-size: 0.7rem;
+  color: #666;
+  text-align: right;
+  font-style: italic;
+}
+
 #modal-actions {
   display: flex;
   justify-content: flex-end;
