@@ -7,6 +7,7 @@ import MegaPlayer from './components/MegaPlayer'
 import UploadModal from './components/UploadModal'
 import AddShowModal from './components/AddShowModal'
 import AdminPanel from './components/AdminPanel'
+import RecommendModal from './components/RecommendModal'
 
 export default function App() {
   const [user, setUser]             = useState(null)
@@ -19,6 +20,7 @@ export default function App() {
   const [showAddShow, setShowAddShow]   = useState(false)
   const [moviesRefreshKey, setMoviesRefreshKey] = useState(0)
   const [tvRefreshKey, setTvRefreshKey]         = useState(0)
+  const [showRecommend, setShowRecommend]       = useState(false)
 
   useEffect(() => {
     fetch('/api/me')
@@ -130,6 +132,10 @@ export default function App() {
         <button id="upload-btn" onClick={() => setShowAddShow(true)} title="Add show">+</button>
       )}
 
+      {!inDetail && !isAdmin && (section === 'movies' || section === 'tv') && (
+        <button id="suggest-btn" onClick={() => setShowRecommend(true)}>suggest a title</button>
+      )}
+
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
@@ -142,6 +148,10 @@ export default function App() {
           onClose={() => setShowAddShow(false)}
           onSuccess={handleAddShowSuccess}
         />
+      )}
+
+      {showRecommend && (
+        <RecommendModal onClose={() => setShowRecommend(false)} />
       )}
 
       <footer>tune in. sit back. enjoy.</footer>

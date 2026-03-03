@@ -40,6 +40,17 @@ db.exec(`
     expires_at TEXT    NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS recommendations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    type         TEXT    NOT NULL CHECK(type IN ('movie','show')),
+    tmdb_id      TEXT,
+    title        TEXT    NOT NULL,
+    note         TEXT    NOT NULL DEFAULT '',
+    submitted_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status       TEXT    NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','noted','dismissed')),
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS movies (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     title        TEXT    NOT NULL,
@@ -335,9 +346,36 @@ function markInviteUsed(token, userId) {
   db.prepare('UPDATE invites SET used_by = ? WHERE token = ?').run(userId, token);
 }
 
+// ── Recommendation helpers ────────────────────────────────────────────────────
+
+function createRecommendation({ type, tmdbId, title, note, submittedBy }) {
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO recommendations (type, tmdb_id, title, note, submitted_by) VALUES (?, ?, ?, ?, ?)'
+  ).run(type, tmdbId || null, title, note || '', submittedBy);
+  return db.prepare('SELECT * FROM recommendations WHERE id = ?').get(lastInsertRowid);
+}
+
+function getAllRecommendations() {
+  return db.prepare(`
+    SELECT r.*, u.username AS submitted_by_name
+    FROM recommendations r
+    JOIN users u ON u.id = r.submitted_by
+    ORDER BY r.created_at DESC
+  `).all();
+}
+
+function updateRecommendationStatus(id, status) {
+  db.prepare('UPDATE recommendations SET status = ? WHERE id = ?').run(status, id);
+}
+
+function deleteRecommendation(id) {
+  db.prepare('DELETE FROM recommendations WHERE id = ?').run(id);
+}
+
 module.exports = {
   getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson,
   getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,
+  createRecommendation, getAllRecommendations, updateRecommendationStatus, deleteRecommendation,
 };

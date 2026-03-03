@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react'
 
+const STATUS_LABELS = { pending: 'pending', noted: 'noted', dismissed: 'dismissed' }
+
+function timeAgo(isoString) {
+  const ms   = Date.now() - new Date(isoString + 'Z').getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 60)  return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)   return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
 export default function AdminPanel({ user }) {
   const [users, setUsers]           = useState([])
   const [inviteRole, setInviteRole] = useState('user')
@@ -7,12 +18,21 @@ export default function AdminPanel({ user }) {
   const [busy, setBusy]             = useState(false)
   const [error, setError]           = useState('')
 
-  useEffect(() => { loadUsers() }, [])
+  const [recs, setRecs]             = useState([])
+  const [recFilter, setRecFilter]   = useState('pending')
+
+  useEffect(() => { loadUsers(); loadRecs() }, [])
 
   async function loadUsers() {
     const res  = await fetch('/api/admin/users')
     const data = await res.json()
     if (res.ok) setUsers(data.users)
+  }
+
+  async function loadRecs() {
+    const res  = await fetch('/api/admin/recommendations')
+    const data = await res.json()
+    if (res.ok) setRecs(data.recommendations)
   }
 
   async function generateInvite() {
@@ -45,8 +65,75 @@ export default function AdminPanel({ user }) {
     }
   }
 
+  async function setRecStatus(id, status) {
+    await fetch(`/api/admin/recommendations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    loadRecs()
+  }
+
+  async function deleteRec(id) {
+    await fetch(`/api/admin/recommendations/${id}`, { method: 'DELETE' })
+    loadRecs()
+  }
+
+  const pendingCount  = recs.filter(r => r.status === 'pending').length
+  const visibleRecs   = recs.filter(r => r.status === recFilter)
+
   return (
     <div id="admin-panel">
+
+      {/* ── Recommendations ── */}
+      <section id="admin-recs-section">
+        <h2 className="admin-heading">
+          recommendations
+          {pendingCount > 0 && <span className="pending-badge">{pendingCount}</span>}
+        </h2>
+
+        <div className="rec-filter-tabs">
+          {['pending', 'noted', 'dismissed'].map(s => (
+            <button
+              key={s}
+              className={`rec-filter-btn${recFilter === s ? ' active' : ''}`}
+              onClick={() => setRecFilter(s)}
+            >
+              {STATUS_LABELS[s]}
+              <span className="rec-filter-count">{recs.filter(r => r.status === s).length}</span>
+            </button>
+          ))}
+        </div>
+
+        {visibleRecs.length === 0 ? (
+          <p className="admin-hint" style={{ marginTop: '0.75rem' }}>No {recFilter} recommendations.</p>
+        ) : (
+          <div className="rec-list">
+            {visibleRecs.map(r => (
+              <div key={r.id} className="rec-item">
+                <div className="rec-meta">
+                  <span className={`rec-type-badge ${r.type}`}>{r.type === 'show' ? 'tv' : 'movie'}</span>
+                  <span className="rec-title">{r.title}</span>
+                  {r.tmdb_id && <span className="rec-tmdb">tmdb:{r.tmdb_id}</span>}
+                </div>
+                <div className="rec-sub">
+                  <span className="rec-who">by {r.submitted_by_name}</span>
+                  <span className="rec-when">{timeAgo(r.created_at)}</span>
+                </div>
+                {r.note && <p className="rec-note">"{r.note}"</p>}
+                <div className="rec-actions">
+                  {r.status !== 'noted'     && <button className="rec-btn" onClick={() => setRecStatus(r.id, 'noted')}>note</button>}
+                  {r.status !== 'pending'   && <button className="rec-btn" onClick={() => setRecStatus(r.id, 'pending')}>mark pending</button>}
+                  {r.status !== 'dismissed' && <button className="rec-btn rec-dismiss" onClick={() => setRecStatus(r.id, 'dismissed')}>dismiss</button>}
+                  <button className="rec-btn rec-delete" onClick={() => deleteRec(r.id)}>delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Users ── */}
       <section id="admin-users-section">
         <h2 className="admin-heading">users</h2>
         <table id="admin-users-table">
@@ -79,6 +166,7 @@ export default function AdminPanel({ user }) {
         </table>
       </section>
 
+      {/* ── Invite ── */}
       <section id="admin-invite-section">
         <h2 className="admin-heading">invite user</h2>
         <div className="invite-row">

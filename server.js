@@ -481,6 +481,42 @@ app.post('/api/admin/invites', requireAdmin, (req, res) => {
   res.json({ url: `${origin}/register/${token}` });
 });
 
+// ── Recommendations ───────────────────────────────────────────────────────────
+app.post('/api/recommendations', express.json(), (req, res) => {
+  const { type, tmdb_id, title, note } = req.body;
+  if (!type || !['movie', 'show'].includes(type)) return res.status(400).json({ error: 'type must be "movie" or "show"' });
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
+  try {
+    const rec = db.createRecommendation({
+      type,
+      tmdbId:      (tmdb_id || '').trim() || null,
+      title:       title.trim(),
+      note:        (note || '').trim(),
+      submittedBy: req.user.user_id,
+    });
+    res.json({ success: true, recommendation: rec });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/recommendations', requireAdmin, (_req, res) => {
+  res.json({ recommendations: db.getAllRecommendations() });
+});
+
+app.patch('/api/admin/recommendations/:id', requireAdmin, express.json(), (req, res) => {
+  const id     = parseInt(req.params.id, 10);
+  const status = req.body.status;
+  if (!['pending', 'noted', 'dismissed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  db.updateRecommendationStatus(id, status);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/recommendations/:id', requireAdmin, (req, res) => {
+  db.deleteRecommendation(parseInt(req.params.id, 10));
+  res.json({ success: true });
+});
+
 // Serve catalogue data from the database
 app.get('/movies.json', (_req, res) => res.json({ movies: db.getAllMovies() }));
 app.get('/tv.json',     (_req, res) => res.json({ shows:  db.getAllShows()  }));
