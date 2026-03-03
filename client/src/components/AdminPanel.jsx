@@ -142,6 +142,7 @@ export default function AdminPanel({ user }) {
               <th>username</th>
               <th>role</th>
               <th>joined</th>
+              <th>last login</th>
               <th>invited by</th>
               <th></th>
             </tr>
@@ -152,6 +153,7 @@ export default function AdminPanel({ user }) {
                 <td>{u.username}{u.id === user.id ? <span className="you-tag"> (you)</span> : null}</td>
                 <td><span className={`role-badge ${u.role}`}>{u.role}</span></td>
                 <td>{new Date(u.created_at + 'Z').toLocaleDateString()}</td>
+                <td>{u.last_login_at ? new Date(u.last_login_at + 'Z').toLocaleDateString() : <span className="muted">—</span>}</td>
                 <td>{u.invited_by_name || <span className="muted">—</span>}</td>
                 <td>
                   {u.id !== user.id && (

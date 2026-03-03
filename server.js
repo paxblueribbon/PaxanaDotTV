@@ -402,6 +402,7 @@ app.post('/login', async (req, res) => {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString().replace('T', ' ').slice(0, 19);
   db.createSession({ token, userId: user.id, expiresAt });
+  db.updateLastLogin(user.id);
   setSessionCookie(res, token);
   res.redirect('/');
 });
@@ -448,6 +449,7 @@ app.post('/register/:token', async (req, res) => {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString().replace('T', ' ').slice(0, 19);
     db.createSession({ token, userId: user.id, expiresAt });
+    db.updateLastLogin(user.id);
     setSessionCookie(res, token);
     res.redirect('/');
   } catch (err) {

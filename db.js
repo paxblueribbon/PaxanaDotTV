@@ -82,6 +82,9 @@ db.exec(`
   );
 `);
 
+// ── Schema migrations ─────────────────────────────────────────────────────────
+try { db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT'); } catch (_) {}
+
 // ── Migration from JSON files ─────────────────────────────────────────────────
 // Tries both data/ and public/ as source locations. Renames originals to .bak.
 function migrateJsonIfNeeded() {
@@ -294,11 +297,15 @@ function getUserById(id) {
 
 function getAllUsers() {
   return db.prepare(`
-    SELECT u.id, u.username, u.role, u.created_at, inv.username AS invited_by_name
+    SELECT u.id, u.username, u.role, u.created_at, u.last_login_at, inv.username AS invited_by_name
     FROM users u
     LEFT JOIN users inv ON inv.id = u.invited_by
     ORDER BY u.created_at ASC
   `).all();
+}
+
+function updateLastLogin(userId) {
+  db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(userId);
 }
 
 function deleteUser(id) {
@@ -374,7 +381,7 @@ function deleteRecommendation(id) {
 
 module.exports = {
   getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson,
-  getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser,
+  getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser, updateLastLogin,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,
   createRecommendation, getAllRecommendations, updateRecommendationStatus, deleteRecommendation,
