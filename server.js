@@ -10,17 +10,34 @@ const multer = require('multer');
 const { Storage } = require('megajs');
 const ffmpegPath = require('ffmpeg-static');
 
-// ── Simple password auth ──────────────────────────────────────────────────────
-const SITE_PASSWORD = process.env.SITE_PASSWORD || 'paxana';
-const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(32).toString('hex');
-const AUTH_COOKIE   = 'paxana_auth';
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const SESSION_COOKIE = 'paxana_session';
+const SESSION_DAYS   = 7;
 
-if (!process.env.SITE_PASSWORD) {
-  console.warn('[auth] SITE_PASSWORD not set — using default "paxana". Set it in your env!');
+const { scrypt, randomBytes, timingSafeEqual } = crypto;
+
+function hashPassword(password) {
+  return new Promise((resolve, reject) => {
+    const salt = randomBytes(16).toString('hex');
+    scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err);
+      else resolve(`${salt}:${key.toString('hex')}`);
+    });
+  });
 }
 
-function makeToken() {
-  return crypto.createHmac('sha256', COOKIE_SECRET).update(SITE_PASSWORD).digest('hex');
+function verifyPassword(password, stored) {
+  return new Promise((resolve, reject) => {
+    const [salt, hash] = stored.split(':');
+    if (!salt || !hash) return resolve(false);
+    scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err);
+      else {
+        try { resolve(timingSafeEqual(Buffer.from(hash, 'hex'), key)); }
+        catch { resolve(false); }
+      }
+    });
+  });
 }
 
 function parseCookies(req) {
@@ -32,11 +49,44 @@ function parseCookies(req) {
   return out;
 }
 
-function requireAuth(req, res, next) {
-  if (req.path === '/login' || req.path === '/logout') return next();
-  if (parseCookies(req)[AUTH_COOKIE] === makeToken()) return next();
-  res.redirect('/login');
+function getSessionUser(req) {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (!token) return null;
+  return db.getSession(token); // { token, user_id, username, role, expires_at }
 }
+
+function setSessionCookie(res, token) {
+  const maxAge = SESSION_DAYS * 24 * 60 * 60;
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Strict`);
+}
+
+const PUBLIC_PATHS = new Set(['/login', '/logout', '/setup']);
+
+function requireAuth(req, res, next) {
+  if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/register/')) return next();
+
+  // Before any users exist, redirect to first-run setup
+  if (db.getUserCount() === 0) return res.redirect('/setup');
+
+  const session = getSessionUser(req);
+  if (!session) {
+    // API callers get JSON 401 instead of a redirect
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Not authenticated' });
+    return res.redirect('/login');
+  }
+  req.user = session;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!req.user || req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    next();
+  });
+}
+
+// Purge expired sessions once an hour
+setInterval(() => db.deleteExpiredSessions(), 60 * 60 * 1000);
 
 // Walks (or creates) a chain of MEGA directories and returns the deepest node.
 async function getMegaSubfolder(storage, ...parts) {
@@ -236,12 +286,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(requireAuth);
 
-const LOGIN_HTML = `<!doctype html>
+// Shared base styles for all server-rendered auth pages
+function authPageHtml({ title, heading, body, error = '' }) {
+  return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Paxana.TV</title>
+  <title>${title || 'Paxana.TV'}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -252,54 +304,181 @@ const LOGIN_HTML = `<!doctype html>
     }
     header { font-size: 2rem; font-weight: 700; letter-spacing: -.5px; margin-bottom: 2rem; }
     header span { color: #e63946; }
-    form {
+    .card {
       display: flex; flex-direction: column; gap: .75rem;
       background: #141414; border: 1px solid #222; border-radius: 10px;
-      padding: 2rem; width: min(320px, 90vw);
+      padding: 2rem; width: min(340px, 90vw);
     }
-    input[type=password] {
+    .card h2 { font-size: .85rem; letter-spacing: .1em; text-transform: uppercase; color: #666; margin-bottom: .25rem; }
+    .info { font-size: .85rem; color: #888; }
+    input[type=text], input[type=password] {
       padding: .6rem .8rem; border-radius: 6px; border: 1px solid #333;
-      background: #1e1e1e; color: #f0f0f0; font-size: 1rem; outline: none;
+      background: #1e1e1e; color: #f0f0f0; font-size: 1rem; outline: none; width: 100%;
     }
-    input[type=password]:focus { border-color: #e63946; }
-    button {
+    input[type=text]:focus, input[type=password]:focus { border-color: #e63946; }
+    button[type=submit] {
       padding: .65rem; border-radius: 6px; border: none;
       background: #e63946; color: #fff; font-size: 1rem; font-weight: 600;
-      cursor: pointer; transition: opacity .15s;
+      cursor: pointer; transition: opacity .15s; margin-top: .25rem;
     }
-    button:hover { opacity: .85; }
+    button[type=submit]:hover { opacity: .85; }
     .err { color: #e63946; font-size: .875rem; text-align: center; }
     footer { margin-top: 3rem; font-size: .8rem; color: #444; }
   </style>
 </head>
 <body>
   <header><span>Paxana</span>.TV</header>
-  <form method="POST" action="/login">
-    <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
-    {{error}}
-    <button type="submit">Enter</button>
-  </form>
+  <div class="card">
+    ${heading ? `<h2>${heading}</h2>` : ''}
+    ${body}
+    ${error ? `<p class="err">${error}</p>` : ''}
+  </div>
   <footer>tune in. sit back. enjoy.</footer>
 </body>
 </html>`;
+}
 
-app.get('/login', (req, res) => {
-  res.send(LOGIN_HTML.replace('{{error}}', ''));
+// ── First-run setup ───────────────────────────────────────────────────────────
+app.get('/setup', (req, res) => {
+  if (db.getUserCount() > 0) return res.redirect('/');
+  res.send(authPageHtml({
+    heading: 'create admin account',
+    body: `<p class="info">No accounts exist yet. Create the first admin to get started.</p>
+    <form method="POST" action="/setup">
+      <input type="text"     name="username" placeholder="username"         autocomplete="username"         autofocus required><br><br>
+      <input type="password" name="password" placeholder="password"         autocomplete="new-password"     required><br><br>
+      <input type="password" name="confirm"  placeholder="confirm password" autocomplete="new-password"     required><br><br>
+      <button type="submit">Create admin account</button>
+    </form>`,
+  }));
 });
 
-app.post('/login', (req, res) => {
-  if (req.body.password === SITE_PASSWORD) {
-    const token   = makeToken();
-    const maxAge  = 7 * 24 * 60 * 60; // 1 week in seconds
-    res.setHeader('Set-Cookie', `${AUTH_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Strict`);
-    return res.redirect('/');
+app.post('/setup', async (req, res) => {
+  if (db.getUserCount() > 0) return res.redirect('/');
+  const { username, password, confirm } = req.body;
+  const fail = msg => res.status(400).send(authPageHtml({ heading: 'create admin account', body: `<form method="POST" action="/setup"><input type="text" name="username" value="${(username||'').replace(/"/g,'')}" placeholder="username" required><br><br><input type="password" name="password" placeholder="password" required><br><br><input type="password" name="confirm" placeholder="confirm password" required><br><br><button type="submit">Create admin account</button></form>`, error: msg }));
+  if (!username || !password) return fail('Username and password are required.');
+  if (password !== confirm)   return fail('Passwords do not match.');
+  if (password.length < 8)    return fail('Password must be at least 8 characters.');
+  try {
+    const hash = await hashPassword(password);
+    const user = db.createUser({ username: username.trim(), passwordHash: hash, role: 'admin', invitedBy: null });
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+    db.createSession({ token, userId: user.id, expiresAt });
+    setSessionCookie(res, token);
+    res.redirect('/');
+  } catch (err) {
+    const msg = err.message.includes('UNIQUE') ? 'Username already taken.' : err.message;
+    fail(msg);
   }
-  res.status(401).send(LOGIN_HTML.replace('{{error}}', '<p class="err">Incorrect password</p>'));
+});
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+app.get('/login', (req, res) => {
+  if (db.getUserCount() === 0) return res.redirect('/setup');
+  res.send(authPageHtml({
+    body: `<form method="POST" action="/login">
+      <input type="text"     name="username" placeholder="username" autocomplete="username"         autofocus required>
+      <br><br>
+      <input type="password" name="password" placeholder="password" autocomplete="current-password" required>
+      <br><br>
+      <button type="submit">Sign in</button>
+    </form>`,
+  }));
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const fail = msg => res.status(401).send(authPageHtml({
+    body: `<form method="POST" action="/login"><input type="text" name="username" value="${(username||'').replace(/"/g,'')}" placeholder="username" autocomplete="username" required><br><br><input type="password" name="password" placeholder="password" autocomplete="current-password" required><br><br><button type="submit">Sign in</button></form>`,
+    error: msg,
+  }));
+  if (!username || !password) return fail('Username and password are required.');
+  const user = db.getUserByUsername(username);
+  if (!user) return fail('Invalid username or password.');
+  const ok = await verifyPassword(password, user.password_hash);
+  if (!ok) return fail('Invalid username or password.');
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+  db.createSession({ token, userId: user.id, expiresAt });
+  setSessionCookie(res, token);
+  res.redirect('/');
 });
 
 app.get('/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (token) db.deleteSession(token);
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
   res.redirect('/login');
+});
+
+// ── Invite registration ───────────────────────────────────────────────────────
+app.get('/register/:token', (req, res) => {
+  const invite = db.getInvite(req.params.token);
+  if (!invite) return res.status(410).send(authPageHtml({ heading: 'invalid invite', body: '<p class="info">This invite link is invalid or has expired.</p>' }));
+  res.send(authPageHtml({
+    heading: 'create account',
+    body: `<p class="info">You've been invited by <strong>${invite.created_by_name}</strong> as a <strong>${invite.role}</strong>.</p>
+    <form method="POST" action="/register/${req.params.token}">
+      <input type="text"     name="username" placeholder="choose a username"  autocomplete="username"     autofocus required><br><br>
+      <input type="password" name="password" placeholder="password"           autocomplete="new-password" required><br><br>
+      <input type="password" name="confirm"  placeholder="confirm password"   autocomplete="new-password" required><br><br>
+      <button type="submit">Create account</button>
+    </form>`,
+  }));
+});
+
+app.post('/register/:token', async (req, res) => {
+  const invite = db.getInvite(req.params.token);
+  if (!invite) return res.status(410).send(authPageHtml({ heading: 'invalid invite', body: '<p class="info">This invite link is invalid or has expired.</p>' }));
+  const { username, password, confirm } = req.body;
+  const fail = msg => res.status(400).send(authPageHtml({
+    heading: 'create account',
+    body: `<p class="info">You've been invited as a <strong>${invite.role}</strong>.</p><form method="POST" action="/register/${req.params.token}"><input type="text" name="username" value="${(username||'').replace(/"/g,'')}" placeholder="choose a username" autocomplete="username" required><br><br><input type="password" name="password" placeholder="password" autocomplete="new-password" required><br><br><input type="password" name="confirm" placeholder="confirm password" autocomplete="new-password" required><br><br><button type="submit">Create account</button></form>`,
+    error: msg,
+  }));
+  if (!username || !password) return fail('Username and password are required.');
+  if (password !== confirm)   return fail('Passwords do not match.');
+  if (password.length < 8)    return fail('Password must be at least 8 characters.');
+  try {
+    const hash = await hashPassword(password);
+    const user = db.createUser({ username: username.trim(), passwordHash: hash, role: invite.role, invitedBy: invite.created_by });
+    db.markInviteUsed(req.params.token, user.id);
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+    db.createSession({ token, userId: user.id, expiresAt });
+    setSessionCookie(res, token);
+    res.redirect('/');
+  } catch (err) {
+    fail(err.message.includes('UNIQUE') ? 'Username already taken.' : err.message);
+  }
+});
+
+// ── Current user ─────────────────────────────────────────────────────────────
+app.get('/api/me', (req, res) => {
+  res.json({ id: req.user.user_id, username: req.user.username, role: req.user.role });
+});
+
+// ── Admin API ─────────────────────────────────────────────────────────────────
+app.get('/api/admin/users', requireAdmin, (_req, res) => {
+  res.json({ users: db.getAllUsers() });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (id === req.user.user_id) return res.status(400).json({ error: "You can't delete your own account." });
+  db.deleteUser(id);
+  res.json({ success: true });
+});
+
+app.post('/api/admin/invites', requireAdmin, (req, res) => {
+  const role = req.body.role === 'admin' ? 'admin' : 'user';
+  const token = randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  db.createInvite({ token, role, createdBy: req.user.user_id, expiresAt });
+  const origin = `${req.protocol}://${req.get('host')}`;
+  res.json({ url: `${origin}/register/${token}` });
 });
 
 // Serve catalogue data from the database

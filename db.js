@@ -14,6 +14,32 @@ db.pragma('foreign_keys = ON');
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT    NOT NULL,
+    role          TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin','user')),
+    invited_by    INTEGER REFERENCES users(id),
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token      TEXT    PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT    NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS invites (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    token      TEXT    NOT NULL UNIQUE,
+    role       TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin','user')),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    used_by    INTEGER REFERENCES users(id),
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT    NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS movies (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     title        TEXT    NOT NULL,
@@ -234,4 +260,84 @@ function addShowWithEpisodes(showData, seasons) {
   })();
 }
 
-module.exports = { getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson };
+// ── User / session / invite helpers ───────────────────────────────────────────
+
+function getUserCount() {
+  return db.prepare('SELECT COUNT(*) as n FROM users').get().n;
+}
+
+function createUser({ username, passwordHash, role, invitedBy }) {
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO users (username, password_hash, role, invited_by) VALUES (?, ?, ?, ?)'
+  ).run(username, passwordHash, role, invitedBy || null);
+  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(lastInsertRowid);
+}
+
+function getUserByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username);
+}
+
+function getUserById(id) {
+  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(id);
+}
+
+function getAllUsers() {
+  return db.prepare(`
+    SELECT u.id, u.username, u.role, u.created_at, inv.username AS invited_by_name
+    FROM users u
+    LEFT JOIN users inv ON inv.id = u.invited_by
+    ORDER BY u.created_at ASC
+  `).all();
+}
+
+function deleteUser(id) {
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
+function createSession({ token, userId, expiresAt }) {
+  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
+}
+
+function getSession(token) {
+  return db.prepare(`
+    SELECT s.token, s.expires_at, u.id AS user_id, u.username, u.role
+    FROM sessions s
+    JOIN users u ON u.id = s.user_id
+    WHERE s.token = ? AND s.expires_at > datetime('now')
+  `).get(token);
+}
+
+function deleteSession(token) {
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+}
+
+function deleteExpiredSessions() {
+  db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
+}
+
+function createInvite({ token, role, createdBy, expiresAt }) {
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO invites (token, role, created_by, expires_at) VALUES (?, ?, ?, ?)'
+  ).run(token, role, createdBy, expiresAt);
+  return db.prepare('SELECT * FROM invites WHERE id = ?').get(lastInsertRowid);
+}
+
+function getInvite(token) {
+  return db.prepare(`
+    SELECT i.*, u.username AS created_by_name
+    FROM invites i
+    JOIN users u ON u.id = i.created_by
+    WHERE i.token = ? AND i.used_by IS NULL AND i.expires_at > datetime('now')
+  `).get(token);
+}
+
+function markInviteUsed(token, userId) {
+  db.prepare('UPDATE invites SET used_by = ? WHERE token = ?').run(userId, token);
+}
+
+module.exports = {
+  getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson,
+  getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser,
+  createSession, getSession, deleteSession, deleteExpiredSessions,
+  createInvite, getInvite, markInviteUsed,
+};

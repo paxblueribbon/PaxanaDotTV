@@ -17,9 +17,179 @@ header {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #888;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  width: min(900px, 96vw);
+  justify-content: space-between;
 }
 
 header span { color: #fff; }
+
+#header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+#header-username { color: #555; }
+
+#header-logout {
+  color: #444;
+  text-decoration: none;
+  border-bottom: 1px solid #333;
+  transition: color 0.2s, border-color 0.2s;
+}
+#header-logout:hover { color: #aaa; border-color: #888; }
+
+/* ── Admin panel ── */
+#admin-panel {
+  width: min(900px, 96vw);
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.admin-heading {
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #555;
+  border-bottom: 1px solid #1c1c1c;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+#admin-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+#admin-users-table th {
+  text-align: left;
+  color: #444;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 0.75rem 0.6rem;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+#admin-users-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #141414;
+  color: #bbb;
+  vertical-align: middle;
+}
+
+#admin-users-table tr:last-child td { border-bottom: none; }
+
+.role-badge {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid;
+}
+.role-badge.admin { color: #e63946; border-color: #4a1218; background: #1a0508; }
+.role-badge.user  { color: #888;    border-color: #2a2a2a; background: #111; }
+
+.you-tag { color: #444; font-size: 0.75em; }
+.muted   { color: #333; }
+
+.admin-remove-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.admin-remove-btn:hover { color: #e63946; border-color: #4a1218; }
+
+.invite-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.invite-role-select {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  color: #aaa;
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  outline: none;
+  cursor: pointer;
+}
+.invite-role-select:focus { border-color: #555; }
+
+.invite-generate-btn {
+  background: none;
+  border: 1px solid #333;
+  color: #888;
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.invite-generate-btn:hover:not(:disabled) { color: #ddd; border-color: #666; }
+.invite-generate-btn:disabled { opacity: 0.4; cursor: default; }
+
+.invite-result {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+
+.invite-url-input {
+  flex: 1;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  color: #777;
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 0.4rem 0.6rem;
+  outline: none;
+  cursor: text;
+}
+
+.invite-copy-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #666;
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s;
+}
+.invite-copy-btn:hover { color: #ddd; border-color: #555; }
+
+.admin-error {
+  color: #e63946;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.admin-hint {
+  color: #333;
+  font-size: 0.65rem;
+  margin-top: 0.75rem;
+}
 
 /* ── Channel list view ── */
 #channel-list-view {

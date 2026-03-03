@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ChannelList from './components/ChannelList'
 import Player from './components/Player'
 import MediaGrid from './components/MediaGrid'
@@ -6,17 +6,26 @@ import ShowDetail from './components/ShowDetail'
 import MegaPlayer from './components/MegaPlayer'
 import UploadModal from './components/UploadModal'
 import AddShowModal from './components/AddShowModal'
+import AdminPanel from './components/AdminPanel'
 
 export default function App() {
-  const [section, setSection] = useState('movies')
-  const [activeKey, setActiveKey] = useState(null)
-  const [activeMovie, setActiveMovie] = useState(null)
-  const [activeShow, setActiveShow] = useState(null)
+  const [user, setUser]             = useState(null)
+  const [section, setSection]       = useState('movies')
+  const [activeKey, setActiveKey]   = useState(null)
+  const [activeMovie, setActiveMovie]   = useState(null)
+  const [activeShow, setActiveShow]     = useState(null)
   const [activeEpisode, setActiveEpisode] = useState(null) // { ep, seasonNum }
-  const [showUpload, setShowUpload] = useState(false)
-  const [showAddShow, setShowAddShow] = useState(false)
+  const [showUpload, setShowUpload]     = useState(false)
+  const [showAddShow, setShowAddShow]   = useState(false)
   const [moviesRefreshKey, setMoviesRefreshKey] = useState(0)
-  const [tvRefreshKey, setTvRefreshKey] = useState(0)
+  const [tvRefreshKey, setTvRefreshKey]         = useState(0)
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(data => setUser(data))
+      .catch(() => {})
+  }, [])
 
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
 
@@ -78,21 +87,36 @@ export default function App() {
     )
   } else if (section === 'live') {
     view = <ChannelList onWatch={setActiveKey} />
+  } else if (section === 'admin') {
+    view = user ? <AdminPanel user={user} /> : null
   } else if (section === 'movies') {
     view = <MediaGrid key={moviesRefreshKey} section="movies" dataKey="movies" onSelect={setActiveMovie} />
   } else {
     view = <MediaGrid key={tvRefreshKey} section="tv" dataKey="shows" onSelect={setActiveShow} />
   }
 
+  const isAdmin = user?.role === 'admin'
+
   return (
     <>
-      <header><span>Paxana</span>.TV</header>
+      <header>
+        <span>Paxana</span>.TV
+        {user && (
+          <div id="header-user">
+            <span id="header-username">{user.username}</span>
+            <a href="/logout" id="header-logout">sign out</a>
+          </div>
+        )}
+      </header>
 
       {!inDetail && (
         <nav id="section-nav">
           <button className={section === 'movies' ? 'active' : ''} onClick={() => setSection('movies')}>Movies</button>
           <button className={section === 'tv'     ? 'active' : ''} onClick={() => setSection('tv')}>TV</button>
           <button className={section === 'live'   ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
+          {isAdmin && (
+            <button className={section === 'admin' ? 'active' : ''} onClick={() => setSection('admin')}>Admin</button>
+          )}
         </nav>
       )}
 
