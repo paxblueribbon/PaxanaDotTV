@@ -102,7 +102,7 @@ export default function App() {
   return (
     <>
       <header>
-        <span>Paxana</span>.TV
+        <span>Paxana</span><span className="tv-suffix">.TV</span>
         {user && (
           <div id="header-user">
             <span id="header-username">{user.username}</span>
@@ -153,8 +153,6 @@ export default function App() {
       {showRecommend && (
         <RecommendModal onClose={() => setShowRecommend(false)} />
       )}
-
-      <footer>tune in. sit back. enjoy.</footer>
     </>
   )
 }

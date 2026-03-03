@@ -3,7 +3,7 @@
 body {
   background: #0a0a0a;
   color: #e0e0e0;
-  font-family: 'Courier New', monospace;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -24,7 +24,8 @@ header {
   justify-content: space-between;
 }
 
-header span { color: #fff; }
+header span { color: #e9d5ff; }
+header .tv-suffix { color: #7c5fa0; }
 
 #header-user {
   display: flex;
@@ -225,7 +226,7 @@ header span { color: #fff; }
   transition: border-color 0.2s, background 0.2s;
 }
 
-.channel-item:hover { background: #181818; border-color: #333; }
+.channel-item:hover { background: #0e0820; border-color: #3b1f6b; }
 .channel-item.offline { opacity: 0.55; }
 .channel-item.offline:hover { opacity: 1; }
 
@@ -273,7 +274,7 @@ header span { color: #fff; }
   cursor: pointer;
   transition: color 0.2s;
 }
-.watch-label:hover { color: #ccc; }
+.watch-label:hover { color: #c4b5fd; }
 
 .stop-btn {
   background: none;
@@ -349,7 +350,7 @@ header span { color: #fff; }
   transition: border-color 0.2s, color 0.2s;
 }
 
-#back-btn:hover { border-color: #666; color: #ccc; }
+#back-btn:hover { border-color: #6b3fa0; color: #c4b5fd; }
 
 #stage {
   position: relative;
@@ -524,8 +525,8 @@ footer {
 }
 
 #section-nav button:last-child { border-right: none; }
-#section-nav button:hover { color: #ccc; background: #111; }
-#section-nav button.active { color: #fff; background: #181818; }
+#section-nav button:hover { color: #c4b5fd; background: #0e0520; }
+#section-nav button.active { color: #c4b5fd; background: #130a26; border-bottom: 2px solid #7c3aed; }
 
 /* ── Media grid view ── */
 #media-grid-view {
@@ -554,7 +555,7 @@ footer {
   transition: border-color 0.2s;
 }
 
-.media-card:hover .poster-wrap { border-color: #555; }
+.media-card:hover .poster-wrap { border-color: #5b3d8a; }
 
 .poster-wrap img {
   width: 100%;
@@ -702,8 +703,8 @@ footer {
 }
 
 #season-tabs button:last-child { border-right: none; }
-#season-tabs button:hover { color: #ccc; background: #111; }
-#season-tabs button.active { color: #fff; background: #181818; }
+#season-tabs button:hover { color: #c4b5fd; background: #0e0520; }
+#season-tabs button.active { color: #c4b5fd; background: #130a26; }
 
 #episode-list {
   display: flex;
@@ -723,8 +724,8 @@ footer {
 }
 
 .episode-item:hover {
-  background: #181818;
-  border-color: #444;
+  background: #100820;
+  border-color: #5b3d8a;
 }
 
 .episode-item.unavailable {
@@ -796,7 +797,7 @@ footer {
   align-items: center;
   justify-content: center;
 }
-#upload-btn:hover { color: #fff; border-color: #888; }
+#upload-btn:hover { color: #c4b5fd; border-color: #6b3fa0; }
 
 /* ── Upload modal ── */
 #modal-backdrop {
@@ -838,7 +839,7 @@ footer {
   padding: 0;
   line-height: 1;
 }
-#modal-close:hover { color: #ccc; }
+#modal-close:hover { color: #c4b5fd; }
 
 #upload-form {
   display: flex;
@@ -882,7 +883,7 @@ footer {
   transition: color 0.2s, border-color 0.2s;
   flex-shrink: 0;
 }
-.tmdb-lookup-btn:hover:not(:disabled) { color: #ccc; border-color: #555; }
+.tmdb-lookup-btn:hover:not(:disabled) { color: #c4b5fd; border-color: #5b3d8a; }
 .tmdb-lookup-btn:disabled { opacity: 0.35; cursor: default; }
 
 #upload-form input[type="text"],
@@ -898,7 +899,7 @@ footer {
   box-sizing: border-box;
 }
 #upload-form input::placeholder { color: #3a3a3a; }
-#upload-form input:focus { outline: none; border-color: #333; }
+#upload-form input:focus { outline: none; border-color: #5b3d8a; }
 #upload-form input:disabled { opacity: 0.4; }
 
 #upload-error {
@@ -965,14 +966,14 @@ footer {
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
 }
-#modal-actions button:hover:not(:disabled) { color: #ccc; border-color: #555; }
+#modal-actions button:hover:not(:disabled) { color: #c4b5fd; border-color: #5b3d8a; }
 #modal-actions button:disabled { opacity: 0.35; cursor: default; }
 
 #upload-submit {
-  color: #aaa !important;
-  border-color: #333 !important;
+  color: #b794f4 !important;
+  border-color: #3b1f6b !important;
 }
-#upload-submit:hover:not(:disabled) { color: #fff !important; border-color: #888 !important; }
+#upload-submit:hover:not(:disabled) { color: #e9d5ff !important; border-color: #6b3fa0 !important; }
 
 /* ── Episode upload modal mode tabs ── */
 #ep-mode-tabs {
@@ -995,8 +996,8 @@ footer {
 }
 
 .ep-mode-btn:last-child { border-right: none; }
-.ep-mode-btn:hover:not(:disabled) { color: #aaa; background: #111; }
-.ep-mode-btn.active { color: #ddd; background: #181818; }
+.ep-mode-btn:hover:not(:disabled) { color: #c4b5fd; background: #0e0520; }
+.ep-mode-btn.active { color: #c4b5fd; background: #130a26; }
 .ep-mode-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Suggest button ── */
