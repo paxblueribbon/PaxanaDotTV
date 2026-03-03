@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 
 export default function AdminPanel({ user }) {
-  const [users, setUsers]         = useState([])
+  const [users, setUsers]           = useState([])
   const [inviteRole, setInviteRole] = useState('user')
-  const [inviteUrl, setInviteUrl] = useState(null)
-  const [busy, setBusy]           = useState(false)
-  const [error, setError]         = useState('')
+  const [inviteUrl, setInviteUrl]   = useState(null)
+  const [busy, setBusy]             = useState(false)
+  const [error, setError]           = useState('')
 
   useEffect(() => { loadUsers() }, [])
 

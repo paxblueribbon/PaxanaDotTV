@@ -537,7 +537,7 @@ app.get('/status/:channel', (req, res) => {
 //   poster_url – URL to poster image
 //
 // Requires MEGA_EMAIL and MEGA_PASSWORD env vars.
-app.post('/api/movies', upload.single('file'), async (req, res) => {
+app.post('/api/movies', requireAdmin, upload.single('file'), async (req, res) => {
   const { title, director, year, genre, poster_url } = req.body;
 
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
@@ -604,7 +604,7 @@ app.post('/api/movies', upload.single('file'), async (req, res) => {
 //   embed_url  – full MEGA URL or bare ID#key (required)
 //   title      – movie title (required)
 //   director, year, genre, poster_url – optional metadata
-app.post('/api/movies/from-url', requireAuth, express.json(), (req, res) => {
+app.post('/api/movies/from-url', requireAdmin, express.json(), (req, res) => {
   const { title, director, year, genre, poster_url, embed_url } = req.body;
   if (!title)     return res.status(400).json({ error: 'Title is required' });
   if (!embed_url) return res.status(400).json({ error: 'embed_url is required' });
@@ -645,7 +645,7 @@ app.get('/api/tmdb/movie/:tmdbId', requireAuth, async (req, res) => {
 
 // ── Add show from TMDB ────────────────────────────────────────────────────────
 // POST /api/shows   body: { tmdb_id }
-app.post('/api/shows', async (req, res) => {
+app.post('/api/shows', requireAdmin, async (req, res) => {
   const tmdbId = String(req.body.tmdb_id || '').trim();
   if (!tmdbId) return res.status(400).json({ error: 'tmdb_id is required' });
 
@@ -677,7 +677,7 @@ app.post('/api/shows', async (req, res) => {
 
 // ── Episode MEGA-link / upload ─────────────────────────────────────────────────
 // PATCH /api/episodes/:id   body: { embed_url }   — set MEGA ID directly
-app.patch('/api/episodes/:id', (req, res) => {
+app.patch('/api/episodes/:id', requireAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id) return res.status(400).json({ error: 'Invalid episode id' });
 
@@ -698,7 +698,7 @@ app.patch('/api/episodes/:id', (req, res) => {
 });
 
 // POST /api/episodes/:id/upload   multipart: { file }   — upload to MEGA then set embed_url
-app.post('/api/episodes/:id/upload', upload.single('file'), async (req, res) => {
+app.post('/api/episodes/:id/upload', requireAdmin, upload.single('file'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id) return res.status(400).json({ error: 'Invalid episode id' });
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
@@ -766,7 +766,7 @@ app.get('/api/show-channels', (req, res) => {
 });
 
 // POST /api/show-channels/:key/launch — build concat file and start ffmpeg
-app.post('/api/show-channels/:key/launch', (req, res) => {
+app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
   const { key } = req.params;
 
   if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
@@ -823,7 +823,7 @@ app.post('/api/show-channels/:key/launch', (req, res) => {
 });
 
 // POST /api/show-channels/:key/stop — kill ffmpeg for this channel
-app.post('/api/show-channels/:key/stop', (req, res) => {
+app.post('/api/show-channels/:key/stop', requireAdmin, (req, res) => {
   const { key }  = req.params;
   const proc     = ffmpegProcesses.get(key);
   if (!proc) return res.status(404).json({ error: 'No stream process for this channel' });

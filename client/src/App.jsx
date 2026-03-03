@@ -27,6 +27,7 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  const isAdmin  = user?.role === 'admin'
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
 
   function handleEpisodeSelect(ep, seasonNum) {
@@ -83,10 +84,11 @@ export default function App() {
         onSelect={handleEpisodeSelect}
         onBack={() => setActiveShow(null)}
         onEpisodeUpdated={handleEpisodeUpdated}
+        isAdmin={isAdmin}
       />
     )
   } else if (section === 'live') {
-    view = <ChannelList onWatch={setActiveKey} />
+    view = <ChannelList onWatch={setActiveKey} isAdmin={isAdmin} />
   } else if (section === 'admin') {
     view = user ? <AdminPanel user={user} /> : null
   } else if (section === 'movies') {
@@ -94,8 +96,6 @@ export default function App() {
   } else {
     view = <MediaGrid key={tvRefreshKey} section="tv" dataKey="shows" onSelect={setActiveShow} />
   }
-
-  const isAdmin = user?.role === 'admin'
 
   return (
     <>
@@ -122,11 +122,11 @@ export default function App() {
 
       {view}
 
-      {!inDetail && section === 'movies' && (
+      {!inDetail && isAdmin && section === 'movies' && (
         <button id="upload-btn" onClick={() => setShowUpload(true)} title="Add movie">+</button>
       )}
 
-      {!inDetail && section === 'tv' && (
+      {!inDetail && isAdmin && section === 'tv' && (
         <button id="upload-btn" onClick={() => setShowAddShow(true)} title="Add show">+</button>
       )}
 

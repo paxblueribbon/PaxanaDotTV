@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 const POLL_MS = 4000
 
-export default function ChannelList({ onWatch }) {
+export default function ChannelList({ onWatch, isAdmin }) {
   const [channels, setChannels]   = useState([])
   const [launching, setLaunching] = useState(new Set())
   const [errors, setErrors]       = useState({}) // key → error message
@@ -40,39 +40,49 @@ export default function ChannelList({ onWatch }) {
     await fetch(`/api/show-channels/${key}/stop`, { method: 'POST' })
   }
 
+  const visible = isAdmin ? channels : channels.filter(ch => ch.live)
+
   return (
     <div id="channel-list-view">
       <h2>Live Channels</h2>
       <div id="channel-list">
-        {channels.length === 0 && (
-          <div id="no-channels">Add show folders to the <code>shows/</code> directory.</div>
+        {visible.length === 0 && (
+          <div id="no-channels">
+            {isAdmin ? 'Add show folders to the shows/ directory.' : 'No channels are live right now.'}
+          </div>
         )}
-        {channels.map(ch => (
+        {visible.map(ch => (
           <div key={ch.key}>
             <div className={`channel-item${ch.live ? '' : ' offline'}`}>
               <div className={`ch-dot${ch.live ? ' live' : ''}`} />
 
               <div className="channel-key">
                 {ch.name}
-                <span className="ch-meta">{ch.episodeCount} episode{ch.episodeCount !== 1 ? 's' : ''}</span>
+                {isAdmin && (
+                  <span className="ch-meta">{ch.episodeCount} episode{ch.episodeCount !== 1 ? 's' : ''}</span>
+                )}
               </div>
 
               {ch.live ? (
                 <div className="ch-actions">
                   <span className="watch-label" onClick={() => onWatch(ch.key)}>watch →</span>
-                  <button className="stop-btn" onClick={() => handleStop(ch.key)}>stop</button>
+                  {isAdmin && (
+                    <button className="stop-btn" onClick={() => handleStop(ch.key)}>stop</button>
+                  )}
                 </div>
               ) : (
-                <button
-                  className="launch-btn"
-                  onClick={() => handleLaunch(ch.key)}
-                  disabled={launching.has(ch.key)}
-                >
-                  {launching.has(ch.key) ? 'launching…' : 'launch →'}
-                </button>
+                isAdmin && (
+                  <button
+                    className="launch-btn"
+                    onClick={() => handleLaunch(ch.key)}
+                    disabled={launching.has(ch.key)}
+                  >
+                    {launching.has(ch.key) ? 'launching…' : 'launch →'}
+                  </button>
+                )
               )}
             </div>
-            {errors[ch.key] && (
+            {isAdmin && errors[ch.key] && (
               <div className="ch-error">{errors[ch.key]}</div>
             )}
           </div>
