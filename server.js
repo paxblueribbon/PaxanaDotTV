@@ -756,15 +756,34 @@ app.post('/api/episodes/:id/upload', requireAdmin, upload.single('file'), async 
     const filePath = convertedPath || uploadPath;
 
     const storage  = await getMegaStorage();
-    const folder   = await getMegaSubfolder(storage, 'Videos', 'TV');
-    const safeName = `ep_${id}_${Date.now()}.mp4`;
+
+    // Look up episode + show for proper naming/subfolder
+    const epInfo = db.prepare(
+      'SELECT e.season, e.episode_number, e.episode_title, s.title AS show_title ' +
+      'FROM episodes e JOIN shows s ON s.id = e.show_id WHERE e.id = ?'
+    ).get(id);
+
+    let safeName, folder;
+    if (epInfo) {
+      const sanitize  = str => str.replace(/[/\\:*?"<>|]/g, '').trim();
+      const showTitle = sanitize(epInfo.show_title);
+      const epTitle   = sanitize(epInfo.episode_title);
+      const season    = String(epInfo.season).padStart(2, '0');
+      const epNum     = String(epInfo.episode_number).padStart(2, '0');
+      safeName = `${showTitle} - S${season}E${epNum}${epTitle ? ` - ${epTitle}` : ''}.mp4`;
+      folder   = await getMegaSubfolder(storage, 'Videos', 'TV', showTitle);
+    } else {
+      safeName = `ep_${id}_${Date.now()}.mp4`;
+      folder   = await getMegaSubfolder(storage, 'Videos', 'TV');
+    }
+
     const { size } = fs.statSync(filePath);
     const megaFile = await folder.upload(
       { name: safeName, size },
       fs.createReadStream(filePath)
     ).complete;
 
-    console.log(`[MEGA] Uploaded episode: Videos/TV/${safeName}`);
+    console.log(`[MEGA] Uploaded episode: Videos/TV/${epInfo ? epInfo.show_title + '/' : ''}${safeName}`);
 
     const url    = await megaFile.link();
     const megaId = extractMegaId(url);

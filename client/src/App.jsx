@@ -102,7 +102,7 @@ export default function App() {
   return (
     <>
       <header>
-        <span>Paxana</span><span className="tv-suffix">.TV</span>
+        <span id="site-title">Paxana<span className="tv-suffix">.TV</span></span>
         {user && (
           <div id="header-user">
             <span id="header-username">{user.username}</span>

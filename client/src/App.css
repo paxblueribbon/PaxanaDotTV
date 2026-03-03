@@ -24,7 +24,7 @@ header {
   justify-content: space-between;
 }
 
-header span { color: #e9d5ff; }
+#site-title { color: #e9d5ff; }
 header .tv-suffix { color: #7c5fa0; }
 
 #header-user {
