@@ -1004,10 +1004,10 @@ footer {
 #suggest-btn {
   position: fixed;
   bottom: 2rem;
-  right: 2rem;
+  left: 2rem;
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #555;
+  border: 1px solid #1e1e1e;
+  color: #444;
   font-family: inherit;
   font-size: 0.7rem;
   letter-spacing: 0.1em;
@@ -1015,7 +1015,7 @@ footer {
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
 }
-#suggest-btn:hover { color: #ccc; border-color: #666; }
+#suggest-btn:hover { color: #c4b5fd; border-color: #5b3d8a; }
 
 /* ── Recommend modal ── */
 .recommend-done {
@@ -1032,8 +1032,8 @@ footer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #e63946;
-  color: #fff;
+  background: #6b2fa0;
+  color: #e9d5ff;
   font-size: 0.55rem;
   font-weight: 700;
   border-radius: 999px;
@@ -1070,13 +1070,13 @@ footer {
 }
 .rec-filter-btn:last-child { border-right: none; }
 .rec-filter-btn:hover  { color: #888; }
-.rec-filter-btn.active { color: #ccc; border-bottom: 1px solid #ccc; margin-bottom: -1px; }
+.rec-filter-btn.active { color: #c4b5fd; border-bottom: 1px solid #7c3aed; margin-bottom: -1px; }
 
 .rec-filter-count {
   color: #2e2e2e;
   font-size: 0.6rem;
 }
-.rec-filter-btn.active .rec-filter-count { color: #555; }
+.rec-filter-btn.active .rec-filter-count { color: #7c5fa0; }
 
 .rec-list {
   display: flex;
@@ -1157,6 +1157,6 @@ footer {
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-.rec-btn:hover         { color: #aaa; border-color: #444; }
+.rec-btn:hover         { color: #c4b5fd; border-color: #5b3d8a; }
 .rec-btn.rec-dismiss:hover { color: #e6a030; border-color: #5a3a00; }
 .rec-btn.rec-delete:hover  { color: #e63946; border-color: #4a1218; }
