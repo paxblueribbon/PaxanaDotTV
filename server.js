@@ -130,7 +130,13 @@ function buildConcatFile(showDir, videoFiles) {
   const concatPath = path.join(showDir, 'concat.txt');
   const lines = [
     'ffconcat version 1.0',
-    ...videoFiles.map(f => `file '${path.join(showDir, f).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`),
+    // Unquoted paths with backslash escaping — avoids the concat demuxer
+    // misinterpreting \' (backslash-apostrophe) inside single-quoted strings.
+    ...videoFiles.map(f => {
+      const full = path.join(showDir, f);
+      const esc  = full.replace(/\\/g, '\\\\').replace(/[ '[\]]/g, '\\$&');
+      return `file ${esc}`;
+    }),
   ];
   fs.writeFileSync(concatPath, lines.join('\n') + '\n', 'utf8');
   return concatPath;
