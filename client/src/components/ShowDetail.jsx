@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import EpisodeUploadModal from './EpisodeUploadModal'
 
-export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, isAdmin }) {
+export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, isAdmin, onTagClick }) {
   const [seasonIdx, setSeasonIdx] = useState(0)
   const [editEp, setEditEp]       = useState(null) // { id, episode_number, episode_title, season }
 
@@ -26,6 +26,13 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, i
           <div id="show-info">
             <div id="show-title">{show.title}</div>
             <div id="show-channel">{show.channel}</div>
+            {show.tags && show.tags.length > 0 && (
+              <div className="media-tags" style={{ margin: '0.4rem 0' }}>
+                {show.tags.map(tag => (
+                  <button key={tag} className="media-tag" onClick={() => onTagClick?.(tag)}>{tag}</button>
+                ))}
+              </div>
+            )}
             <p id="show-desc">{show.description}</p>
           </div>
         </div>
@@ -43,6 +50,13 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, i
         <div id="show-info">
           <div id="show-title">{show.title}</div>
           <div id="show-channel">{show.channel}</div>
+          {show.tags && show.tags.length > 0 && (
+            <div className="media-tags" style={{ margin: '0.4rem 0' }}>
+              {show.tags.map(tag => (
+                <button key={tag} className="media-tag" onClick={() => onTagClick?.(tag)}>{tag}</button>
+              ))}
+            </div>
+          )}
           <p id="show-desc">{show.description}</p>
         </div>
       </div>

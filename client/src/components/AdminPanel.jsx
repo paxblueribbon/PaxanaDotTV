@@ -1,13 +1,37 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const STATUS_LABELS = { pending: 'pending', noted: 'noted', dismissed: 'dismissed' }
 
-function TagRow({ item, type, onSaved }) {
+function TagRow({ item, type, onSaved, allTags }) {
   const [draft,  setDraft]  = useState(item.tags.join(', '))
   const [saving, setSaving] = useState(false)
+  const [sugs,   setSugs]   = useState([])
+  const inputRef            = useRef(null)
+
+  function handleChange(e) {
+    const val     = e.target.value
+    setDraft(val)
+    const parts   = val.split(',')
+    const partial = parts[parts.length - 1].trim().toLowerCase()
+    if (partial) {
+      const already = new Set(parts.slice(0, -1).map(t => t.trim().toLowerCase()))
+      setSugs(allTags.filter(t => t.startsWith(partial) && !already.has(t)).slice(0, 6))
+    } else {
+      setSugs([])
+    }
+  }
+
+  function applySug(tag) {
+    const parts    = draft.split(',').slice(0, -1)
+    const newDraft = [...parts, ' ' + tag].join(',').replace(/^[\s,]+/, '') + ', '
+    setDraft(newDraft)
+    setSugs([])
+    inputRef.current?.focus()
+  }
 
   async function save() {
     setSaving(true)
+    setSugs([])
     const tags = draft.split(',').map(t => t.trim()).filter(Boolean)
     await fetch(`/api/admin/${type === 'movie' ? 'movies' : 'shows'}/${item.id}/tags`, {
       method:  'PATCH',
@@ -21,13 +45,22 @@ function TagRow({ item, type, onSaved }) {
   return (
     <div className="tag-row">
       <span className="tag-row-title">{item.title}</span>
-      <input
-        className="tag-row-input"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && save()}
-        placeholder="comma-separated tags"
-      />
+      <div className="tag-row-input-wrap">
+        <input
+          ref={inputRef}
+          className="tag-row-input"
+          value={draft}
+          onChange={handleChange}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setSugs([]) }}
+          onBlur={() => setTimeout(() => setSugs([]), 150)}
+          placeholder="comma-separated tags"
+        />
+        {sugs.length > 0 && (
+          <ul className="tag-suggestions">
+            {sugs.map(s => <li key={s} onMouseDown={() => applySug(s)}>{s}</li>)}
+          </ul>
+        )}
+      </div>
       <button className="tag-row-save" onClick={save} disabled={saving}>
         {saving ? '…' : 'save'}
       </button>
@@ -125,6 +158,7 @@ export default function AdminPanel({ user }) {
 
   const pendingCount  = recs.filter(r => r.status === 'pending').length
   const visibleRecs   = recs.filter(r => r.status === recFilter)
+  const allTags       = [...new Set([...tagMovies, ...tagShows].flatMap(item => item.tags ?? []))].sort()
 
   return (
     <div id="admin-panel">
@@ -198,6 +232,7 @@ export default function AdminPanel({ user }) {
               item={item}
               type={tagSection === 'movies' ? 'movie' : 'show'}
               onSaved={loadTagItems}
+              allTags={allTags}
             />
           ))}
         </div>

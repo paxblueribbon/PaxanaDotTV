@@ -21,6 +21,7 @@ export default function App() {
   const [moviesRefreshKey, setMoviesRefreshKey] = useState(0)
   const [tvRefreshKey, setTvRefreshKey]         = useState(0)
   const [showRecommend, setShowRecommend]       = useState(false)
+  const [tagFilter, setTagFilter]               = useState(null) // { tag, section }
 
   useEffect(() => {
     fetch('/api/me')
@@ -31,6 +32,15 @@ export default function App() {
 
   const isAdmin  = user?.role === 'admin'
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
+
+  function handleTagClick(tag, targetSection) {
+    setActiveMovie(null)
+    setActiveShow(null)
+    setActiveEpisode(null)
+    setActiveKey(null)
+    setSection(targetSection)
+    setTagFilter({ tag, section: targetSection })
+  }
 
   function handleEpisodeSelect(ep, seasonNum) {
     setActiveEpisode({ ep, seasonNum })
@@ -68,6 +78,8 @@ export default function App() {
         subtitle={`${activeMovie.director} · ${activeMovie.release_year} · ${activeMovie.genre}`}
         embedUrl={activeMovie.embed_url}
         onBack={() => setActiveMovie(null)}
+        tags={activeMovie.tags}
+        onTagClick={tag => handleTagClick(tag, 'movies')}
       />
     )
   } else if (activeEpisode) {
@@ -77,6 +89,8 @@ export default function App() {
         subtitle={`S${activeEpisode.seasonNum} E${activeEpisode.ep.episode_number} · ${activeEpisode.ep.episode_title}`}
         embedUrl={activeEpisode.ep.embed_url}
         onBack={() => setActiveEpisode(null)}
+        tags={activeShow.tags}
+        onTagClick={tag => handleTagClick(tag, 'tv')}
       />
     )
   } else if (activeShow) {
@@ -87,6 +101,7 @@ export default function App() {
         onBack={() => setActiveShow(null)}
         onEpisodeUpdated={handleEpisodeUpdated}
         isAdmin={isAdmin}
+        onTagClick={tag => handleTagClick(tag, 'tv')}
       />
     )
   } else if (section === 'live') {
@@ -94,9 +109,27 @@ export default function App() {
   } else if (section === 'admin') {
     view = user ? <AdminPanel user={user} /> : null
   } else if (section === 'movies') {
-    view = <MediaGrid key={moviesRefreshKey} section="movies" dataKey="movies" onSelect={setActiveMovie} />
+    view = (
+      <MediaGrid
+        key={moviesRefreshKey}
+        section="movies" dataKey="movies"
+        onSelect={setActiveMovie}
+        tagFilter={tagFilter?.section === 'movies' ? tagFilter.tag : null}
+        onClearTag={() => setTagFilter(null)}
+        onTagClick={tag => setTagFilter({ tag, section: 'movies' })}
+      />
+    )
   } else {
-    view = <MediaGrid key={tvRefreshKey} section="tv" dataKey="shows" onSelect={setActiveShow} />
+    view = (
+      <MediaGrid
+        key={tvRefreshKey}
+        section="tv" dataKey="shows"
+        onSelect={setActiveShow}
+        tagFilter={tagFilter?.section === 'tv' ? tagFilter.tag : null}
+        onClearTag={() => setTagFilter(null)}
+        onTagClick={tag => setTagFilter({ tag, section: 'tv' })}
+      />
+    )
   }
 
   return (
@@ -113,9 +146,9 @@ export default function App() {
 
       {!inDetail && (
         <nav id="section-nav">
-          <button className={section === 'movies' ? 'active' : ''} onClick={() => setSection('movies')}>Movies</button>
-          <button className={section === 'tv'     ? 'active' : ''} onClick={() => setSection('tv')}>TV</button>
-          <button className={section === 'live'   ? 'active' : ''} onClick={() => setSection('live')}>Live</button>
+          <button className={section === 'movies' ? 'active' : ''} onClick={() => { setSection('movies'); setTagFilter(null) }}>Movies</button>
+          <button className={section === 'tv'     ? 'active' : ''} onClick={() => { setSection('tv');     setTagFilter(null) }}>TV</button>
+          <button className={section === 'live'   ? 'active' : ''} onClick={() => { setSection('live');   setTagFilter(null) }}>Live</button>
           {isAdmin && (
             <button className={section === 'admin' ? 'active' : ''} onClick={() => setSection('admin')}>Admin</button>
           )}

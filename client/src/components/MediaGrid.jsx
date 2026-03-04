@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function MediaGrid({ section, dataKey, onSelect }) {
+export default function MediaGrid({ section, dataKey, onSelect, tagFilter, onClearTag, onTagClick }) {
   const [items, setItems] = useState([])
 
   useEffect(() => {
@@ -12,13 +12,20 @@ export default function MediaGrid({ section, dataKey, onSelect }) {
 
   const getImage = item => item.poster_url || item.image_url
   const getSub   = item => item.release_year || item.channel || ''
+  const filtered = tagFilter ? items.filter(item => item.tags?.includes(tagFilter)) : items
 
   return (
     <div id="media-grid-view">
-      {items.length === 0
-        ? <p id="no-media">Nothing here yet.</p>
+      {tagFilter && (
+        <div id="tag-filter-bar">
+          <span>tagged: <strong>{tagFilter}</strong></span>
+          <button id="tag-filter-clear" onClick={onClearTag}>×</button>
+        </div>
+      )}
+      {filtered.length === 0
+        ? <p id="no-media">{tagFilter ? `No ${dataKey} tagged "${tagFilter}".` : 'Nothing here yet.'}</p>
         : <div id="media-grid">
-            {items.map(item => (
+            {filtered.map(item => (
               <div key={item.id} className="media-card" onClick={() => onSelect(item)}>
                 <div className="poster-wrap">
                   <img src={getImage(item)} alt={item.title} loading="lazy" />
@@ -28,7 +35,13 @@ export default function MediaGrid({ section, dataKey, onSelect }) {
                   <span className="media-year">{getSub(item)}</span>
                   {item.tags && item.tags.length > 0 && (
                     <div className="media-tags">
-                      {item.tags.map(tag => <span key={tag} className="media-tag">{tag}</span>)}
+                      {item.tags.map(tag => (
+                        <button
+                          key={tag}
+                          className={`media-tag${tag === tagFilter ? ' active' : ''}`}
+                          onClick={e => { e.stopPropagation(); onTagClick?.(tag) }}
+                        >{tag}</button>
+                      ))}
                     </div>
                   )}
                 </div>
