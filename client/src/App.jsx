@@ -8,6 +8,7 @@ import UploadModal from './components/UploadModal'
 import AddShowModal from './components/AddShowModal'
 import AdminPanel from './components/AdminPanel'
 import RecommendModal from './components/RecommendModal'
+import SearchBar from './components/SearchBar'
 
 export default function App() {
   const [user, setUser]             = useState(null)
@@ -40,6 +41,22 @@ export default function App() {
     setActiveKey(null)
     setSection(targetSection)
     setTagFilter({ tag, section: targetSection })
+  }
+
+  function handleSearchMovie(movie) {
+    setActiveShow(null); setActiveEpisode(null); setActiveKey(null)
+    setActiveMovie(movie)
+  }
+
+  function handleSearchShow(show) {
+    setActiveMovie(null); setActiveEpisode(null); setActiveKey(null)
+    setActiveShow(show)
+  }
+
+  function handleSearchChannel(key) {
+    setActiveMovie(null); setActiveShow(null); setActiveEpisode(null)
+    setSection('live')
+    setActiveKey(key)
   }
 
   function handleEpisodeSelect(ep, seasonNum) {
@@ -136,6 +153,13 @@ export default function App() {
     <>
       <header>
         <span id="site-title">Paxana<span className="tv-suffix">.TV</span></span>
+        <SearchBar
+          refreshKey={moviesRefreshKey + tvRefreshKey}
+          onSelectMovie={handleSearchMovie}
+          onSelectShow={handleSearchShow}
+          onSelectChannel={handleSearchChannel}
+          onSelectTag={handleTagClick}
+        />
         {user && (
           <div id="header-user">
             <span id="header-username">{user.username}</span>

@@ -18,10 +18,100 @@ header {
   text-transform: uppercase;
   color: #888;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
   width: min(900px, 96vw);
   justify-content: space-between;
+}
+
+/* ── Search ── */
+#search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 260px;
+}
+
+#search-input {
+  width: 100%;
+  background: #0e0e0e;
+  border: 1px solid #222;
+  border-radius: 2px;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.6rem;
+  outline: none;
+  text-transform: none;
+  transition: border-color 0.2s;
+}
+#search-input:focus         { border-color: #5b3d8a; }
+#search-input::placeholder  { color: #444; }
+#search-input::-webkit-search-cancel-button { display: none; }
+
+#search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 240px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #0f0f0f;
+  border: 1px solid #2e1f45;
+  z-index: 200;
+}
+
+.sr-group { border-bottom: 1px solid #1a1a1a; }
+.sr-group:last-child { border-bottom: none; }
+
+.sr-group-label {
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #444;
+  padding: 0.3rem 0.6rem 0.1rem;
+}
+
+.sr-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #aaa;
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.sr-item:hover { background: #1e0e38; color: #e9d5ff; }
+
+.sr-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-sub   { color: #555; font-size: 0.62rem; flex-shrink: 0; }
+
+.sr-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e63946;
+  flex-shrink: 0;
+}
+
+.sr-tag-item       { color: #7c5fa0; }
+.sr-tag-item:hover { color: #c4b5fd; background: #1e0e38; }
+
+.sr-empty {
+  padding: 0.6rem 0.6rem;
+  font-size: 0.68rem;
+  color: #444;
+  letter-spacing: 0.06em;
+  text-transform: none;
 }
 
 #site-title { color: #e9d5ff; }
