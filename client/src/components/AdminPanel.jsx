@@ -228,7 +228,7 @@ export default function AdminPanel({ user }) {
         <div className="tag-list">
           {(tagSection === 'movies' ? tagMovies : tagShows).map(item => (
             <TagRow
-              key={item.id}
+              key={`${tagSection}-${item.id}`}
               item={item}
               type={tagSection === 'movies' ? 'movie' : 'show'}
               onSaved={loadTagItems}
