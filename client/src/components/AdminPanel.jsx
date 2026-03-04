@@ -2,6 +2,39 @@ import { useState, useEffect } from 'react'
 
 const STATUS_LABELS = { pending: 'pending', noted: 'noted', dismissed: 'dismissed' }
 
+function TagRow({ item, type, onSaved }) {
+  const [draft,  setDraft]  = useState(item.tags.join(', '))
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    const tags = draft.split(',').map(t => t.trim()).filter(Boolean)
+    await fetch(`/api/admin/${type === 'movie' ? 'movies' : 'shows'}/${item.id}/tags`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ tags }),
+    })
+    setSaving(false)
+    onSaved()
+  }
+
+  return (
+    <div className="tag-row">
+      <span className="tag-row-title">{item.title}</span>
+      <input
+        className="tag-row-input"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && save()}
+        placeholder="comma-separated tags"
+      />
+      <button className="tag-row-save" onClick={save} disabled={saving}>
+        {saving ? '…' : 'save'}
+      </button>
+    </div>
+  )
+}
+
 function timeAgo(isoString) {
   const ms   = Date.now() - new Date(isoString + 'Z').getTime()
   const mins = Math.floor(ms / 60000)
@@ -21,12 +54,23 @@ export default function AdminPanel({ user }) {
   const [recs, setRecs]             = useState([])
   const [recFilter, setRecFilter]   = useState('pending')
 
-  useEffect(() => { loadUsers(); loadRecs() }, [])
+  const [tagSection,  setTagSection]  = useState('movies')
+  const [tagMovies,   setTagMovies]   = useState([])
+  const [tagShows,    setTagShows]    = useState([])
+
+  useEffect(() => { loadUsers(); loadRecs(); loadTagItems() }, [])
 
   async function loadUsers() {
     const res  = await fetch('/api/admin/users')
     const data = await res.json()
     if (res.ok) setUsers(data.users)
+  }
+
+  async function loadTagItems() {
+    const [mr, sr] = await Promise.all([fetch('/movies.json'), fetch('/tv.json')])
+    const [md, sd] = await Promise.all([mr.json(), sr.json()])
+    setTagMovies(md.movies ?? [])
+    setTagShows(sd.shows   ?? [])
   }
 
   async function loadRecs() {
@@ -131,6 +175,32 @@ export default function AdminPanel({ user }) {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ── Tags ── */}
+      <section id="admin-tags-section">
+        <h2 className="admin-heading">content tags</h2>
+        <div className="rec-filter-tabs">
+          {[['movies', 'movies'], ['shows', 'tv shows']].map(([key, label]) => (
+            <button
+              key={key}
+              className={`rec-filter-btn${tagSection === key ? ' active' : ''}`}
+              onClick={() => setTagSection(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="tag-list">
+          {(tagSection === 'movies' ? tagMovies : tagShows).map(item => (
+            <TagRow
+              key={item.id}
+              item={item}
+              type={tagSection === 'movies' ? 'movie' : 'show'}
+              onSaved={loadTagItems}
+            />
+          ))}
+        </div>
       </section>
 
       {/* ── Users ── */}

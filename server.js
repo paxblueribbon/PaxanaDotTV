@@ -519,6 +519,21 @@ app.delete('/api/admin/recommendations/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Tag management ────────────────────────────────────────────────────────────
+app.patch('/api/admin/movies/:id/tags', requireAdmin, express.json(), (req, res) => {
+  const id   = parseInt(req.params.id, 10);
+  const tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+  db.setTagsForMedia('movie', id, tags);
+  res.json({ success: true });
+});
+
+app.patch('/api/admin/shows/:id/tags', requireAdmin, express.json(), (req, res) => {
+  const id   = parseInt(req.params.id, 10);
+  const tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+  db.setTagsForMedia('show', id, tags);
+  res.json({ success: true });
+});
+
 // Serve catalogue data from the database
 app.get('/movies.json', (_req, res) => res.json({ movies: db.getAllMovies() }));
 app.get('/tv.json',     (_req, res) => res.json({ shows:  db.getAllShows()  }));

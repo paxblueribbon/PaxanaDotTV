@@ -84,6 +84,18 @@ db.exec(`
 
 // ── Schema migrations ─────────────────────────────────────────────────────────
 try { db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT'); } catch (_) {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tags (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+  );
+  CREATE TABLE IF NOT EXISTS media_tags (
+    tag_id     INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    media_type TEXT    NOT NULL CHECK(media_type IN ('movie','show')),
+    media_id   INTEGER NOT NULL,
+    PRIMARY KEY (tag_id, media_type, media_id)
+  );
+`);
 
 // ── Migration from JSON files ─────────────────────────────────────────────────
 // Tries both data/ and public/ as source locations. Renames originals to .bak.
@@ -152,7 +164,11 @@ migrateJsonIfNeeded();
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
 function getAllMovies() {
-  return db.prepare('SELECT * FROM movies ORDER BY added_at DESC').all();
+  const movies = db.prepare('SELECT * FROM movies ORDER BY added_at DESC').all();
+  const tagMap = {};
+  db.prepare('SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_type = ?').all('movie')
+    .forEach(r => { (tagMap[r.media_id] ??= []).push(r.name); });
+  return movies.map(m => ({ ...m, tags: tagMap[m.id] || [] }));
 }
 
 function addMovie({ title, director, release_year, genre, poster_url, embed_url }) {
@@ -168,12 +184,16 @@ function getAllShows() {
   const episodes = db.prepare(
     'SELECT * FROM episodes ORDER BY show_id, season, episode_number'
   ).all();
+  const tagMap = {};
+  db.prepare('SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_type = ?').all('show')
+    .forEach(r => { (tagMap[r.media_id] ??= []).push(r.name); });
 
   return shows.map(show => {
     const eps     = episodes.filter(e => e.show_id === show.id);
     const seasons = [...new Set(eps.map(e => e.season))].sort((a, b) => a - b);
     return {
       ...show,
+      tags: tagMap[show.id] || [],
       seasons: seasons.map(s => ({
         season:   s,
         episodes: eps
@@ -379,10 +399,25 @@ function deleteRecommendation(id) {
   db.prepare('DELETE FROM recommendations WHERE id = ?').run(id);
 }
 
+// ── Tag helpers ───────────────────────────────────────────────────────────────
+
+function setTagsForMedia(type, id, tagNames) {
+  const normalized = [...new Set(tagNames.map(t => t.trim().toLowerCase()).filter(Boolean))];
+  db.transaction(() => {
+    db.prepare('DELETE FROM media_tags WHERE media_type = ? AND media_id = ?').run(type, id);
+    for (const name of normalized) {
+      db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)').run(name);
+      const tag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE').get(name);
+      db.prepare('INSERT OR IGNORE INTO media_tags (tag_id, media_type, media_id) VALUES (?, ?, ?)').run(tag.id, type, id);
+    }
+  })();
+}
+
 module.exports = {
   getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson,
   getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser, updateLastLogin,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,
   createRecommendation, getAllRecommendations, updateRecommendationStatus, deleteRecommendation,
+  setTagsForMedia,
 };

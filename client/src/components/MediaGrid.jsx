@@ -26,6 +26,11 @@ export default function MediaGrid({ section, dataKey, onSelect }) {
                 <div className="media-info">
                   <span className="media-title">{item.title}</span>
                   <span className="media-year">{getSub(item)}</span>
+                  {item.tags && item.tags.length > 0 && (
+                    <div className="media-tags">
+                      {item.tags.map(tag => <span key={tag} className="media-tag">{tag}</span>)}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
