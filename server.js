@@ -56,8 +56,9 @@ function getSessionUser(req) {
 }
 
 function setSessionCookie(res, token) {
-  const maxAge = SESSION_DAYS * 24 * 60 * 60;
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Strict`);
+  const maxAge  = SESSION_DAYS * 24 * 60 * 60;
+  const secure  = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Strict${secure}`);
 }
 
 const PUBLIC_PATHS = new Set(['/login', '/logout', '/setup']);
@@ -233,14 +234,16 @@ if (!fs.existsSync(MEDIA_ROOT)) {
 const nms = new NodeMediaServer({
   rtmp: {
     port: RTMP_PORT,
+    host: '127.0.0.1', // localhost only — ffmpeg pushes locally, no public RTMP
     chunk_size: 60000,
     gop_cache: true,
     ping: 30,
     ping_timeout: 60,
   },
   http: {
-    // node-media-server's own HTTP is disabled; Express handles everything
+    // node-media-server's own HTTP is only used internally for HLS transcoding
     port: 8888,
+    host: '127.0.0.1',
     allow_origin: '*',
     mediaroot: MEDIA_ROOT,
   },
@@ -416,7 +419,7 @@ app.post('/login', async (req, res) => {
 app.get('/logout', (req, res) => {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (token) db.deleteSession(token);
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
   res.redirect('/login');
 });
 
