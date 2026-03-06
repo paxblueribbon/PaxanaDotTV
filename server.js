@@ -1,4 +1,7 @@
 require('dotenv').config();
+// megajs uses the Web Crypto API (globalThis.crypto.getRandomValues).
+// Polyfill for Node versions that don't expose it as a global.
+if (!globalThis.crypto) globalThis.crypto = require('crypto').webcrypto;
 const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
