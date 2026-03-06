@@ -882,22 +882,12 @@ app.get('/api/show-channels', (req, res) => {
   }
 });
 
-// POST /api/show-channels/:key/launch — build concat file and start ffmpeg
-app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
-  const { key } = req.params;
+// Keys that were intentionally stopped — don't auto-restart these.
+const stoppedChannels = new Set();
 
-  if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
-
-  const name = getShowFolders().find(n => showNameToKey(n) === key);
-  if (!name) return res.status(404).json({ error: 'Show folder not found' });
-
-  const showDir    = path.join(SHOWS_DIR, name);
-  const videos     = getVideoFiles(showDir);
-  if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
-
-  const concatPath = buildConcatFile(showDir, videos);
-  const rtmpUrl    = `rtmp://localhost/live/${key}`;
-  const binary     = process.env.FFMPEG_PATH || ffmpegPath;
+function launchFfmpeg(key, name, concatPath, rtmpUrl) {
+  if (stoppedChannels.has(key)) return; // stop was requested, don't restart
+  const binary = process.env.FFMPEG_PATH || ffmpegPath;
 
   const proc = spawn(binary, [
     '-re',
@@ -932,18 +922,43 @@ app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
   proc.on('exit', (code, signal) => {
     console.log(`[ffmpeg] "${name}" exited (code=${code} signal=${signal})`);
     ffmpegProcesses.delete(key);
+    if (!stoppedChannels.has(key)) {
+      console.log(`[ffmpeg] Auto-restarting "${name}" in 2s…`);
+      setTimeout(() => launchFfmpeg(key, name, concatPath, rtmpUrl), 2000);
+    }
   });
 
   ffmpegProcesses.set(key, proc);
   console.log(`[ffmpeg] Launched "${name}" → ${rtmpUrl} (pid=${proc.pid})`);
-  res.json({ success: true, key, pid: proc.pid });
+}
+
+// POST /api/show-channels/:key/launch — build concat file and start ffmpeg
+app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
+  const { key } = req.params;
+
+  if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
+
+  const name = getShowFolders().find(n => showNameToKey(n) === key);
+  if (!name) return res.status(404).json({ error: 'Show folder not found' });
+
+  const showDir = path.join(SHOWS_DIR, name);
+  const videos  = getVideoFiles(showDir);
+  if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
+
+  const concatPath = buildConcatFile(showDir, videos);
+  const rtmpUrl    = `rtmp://localhost/live/${key}`;
+
+  stoppedChannels.delete(key);
+  launchFfmpeg(key, name, concatPath, rtmpUrl);
+  res.json({ success: true, key });
 });
 
 // POST /api/show-channels/:key/stop — kill ffmpeg for this channel
 app.post('/api/show-channels/:key/stop', requireAdmin, (req, res) => {
-  const { key }  = req.params;
-  const proc     = ffmpegProcesses.get(key);
+  const { key } = req.params;
+  const proc    = ffmpegProcesses.get(key);
   if (!proc) return res.status(404).json({ error: 'No stream process for this channel' });
+  stoppedChannels.add(key);   // prevent auto-restart
   proc.kill('SIGTERM');
   ffmpegProcesses.delete(key);
   res.json({ success: true });
