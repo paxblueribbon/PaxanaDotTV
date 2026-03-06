@@ -552,10 +552,10 @@ app.delete('/api/admin/movies/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// DELETE /api/admin/episodes/:id
+// DELETE /api/admin/episodes/:id  — clears the MEGA link (does not remove the episode row)
 app.delete('/api/admin/episodes/:id', requireAdmin, (req, res) => {
-  db.deleteEpisode(parseInt(req.params.id, 10));
-  res.json({ success: true });
+  const episode = db.clearEpisodeUrl(parseInt(req.params.id, 10));
+  res.json({ success: true, episode });
 });
 
 // ── Tag management ────────────────────────────────────────────────────────────

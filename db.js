@@ -273,8 +273,9 @@ function deleteMovie(id) {
   db.prepare('DELETE FROM movies WHERE id = ?').run(id);
 }
 
-function deleteEpisode(id) {
-  db.prepare('DELETE FROM episodes WHERE id = ?').run(id);
+function clearEpisodeUrl(id) {
+  db.prepare("UPDATE episodes SET embed_url = '' WHERE id = ?").run(id);
+  return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
 }
 
 // showData: { title, channel, description, image_url }
@@ -427,7 +428,7 @@ function setTagsForMedia(type, id, tagNames) {
 }
 
 module.exports = {
-  getAllMovies, addMovie, updateMovieUrl, deleteMovie, getAllShows, updateEpisodeUrl, deleteEpisode, addShowWithEpisodes, importFromJson,
+  getAllMovies, addMovie, updateMovieUrl, deleteMovie, getAllShows, updateEpisodeUrl, clearEpisodeUrl, addShowWithEpisodes, importFromJson,
   getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser, updateLastLogin,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,

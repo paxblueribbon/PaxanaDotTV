@@ -17,11 +17,11 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
     onEpisodeUpdated(episodeId, embedUrl)
   }
 
-  async function handleDeleteEpisode(e, epId) {
+  async function handleClearEpisode(e, epId) {
     e.stopPropagation()
-    if (!confirm('Remove this episode? This cannot be undone.')) return
+    if (!confirm('Clear the MEGA link for this episode?')) return
     const res = await fetch(`/api/admin/episodes/${epId}`, { method: 'DELETE' })
-    if (res.ok) onEpisodeDeleted?.(epId)
+    if (res.ok) onEpisodeUpdated(epId, '')
   }
 
   if (!season) {
@@ -105,8 +105,8 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
                         >edit</button>
                         <button
                           className="ep-admin-btn ep-admin-btn-del"
-                          onClick={e => handleDeleteEpisode(e, ep.id)}
-                          title="Remove episode"
+                          onClick={e => handleClearEpisode(e, ep.id)}
+                          title="Clear MEGA link"
                         >✕</button>
                       </>
                     )}
