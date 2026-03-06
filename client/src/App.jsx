@@ -75,6 +75,16 @@ export default function App() {
     }))
   }
 
+  function handleEpisodeDeleted(episodeId) {
+    setActiveShow(show => ({
+      ...show,
+      seasons: show.seasons.map(s => ({
+        ...s,
+        episodes: s.episodes.filter(ep => ep.id !== episodeId),
+      })),
+    }))
+  }
+
   function handleUploadSuccess() {
     setShowUpload(false)
     setMoviesRefreshKey(k => k + 1)
@@ -117,6 +127,7 @@ export default function App() {
         onSelect={handleEpisodeSelect}
         onBack={() => setActiveShow(null)}
         onEpisodeUpdated={handleEpisodeUpdated}
+        onEpisodeDeleted={handleEpisodeDeleted}
         isAdmin={isAdmin}
         onTagClick={tag => handleTagClick(tag, 'tv')}
       />
@@ -134,6 +145,7 @@ export default function App() {
         tagFilter={tagFilter?.section === 'movies' ? tagFilter.tag : null}
         onClearTag={() => setTagFilter(null)}
         onTagClick={tag => setTagFilter({ tag, section: 'movies' })}
+        isAdmin={isAdmin}
       />
     )
   } else {

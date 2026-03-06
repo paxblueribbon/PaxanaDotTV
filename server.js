@@ -528,6 +528,36 @@ app.delete('/api/admin/recommendations/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Movie link / removal ──────────────────────────────────────────────────────
+// PATCH /api/admin/movies/:id   body: { embed_url }   — update MEGA link
+app.patch('/api/admin/movies/:id', requireAdmin, express.json(), (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'Invalid movie id' });
+  let { embed_url } = req.body;
+  if (!embed_url || !embed_url.trim()) return res.status(400).json({ error: 'embed_url is required' });
+  embed_url = embed_url.trim();
+  const megaId = extractMegaId(embed_url);
+  if (megaId) embed_url = megaId;
+  try {
+    const movie = db.updateMovieUrl(id, embed_url);
+    res.json({ success: true, movie });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/movies/:id
+app.delete('/api/admin/movies/:id', requireAdmin, (req, res) => {
+  db.deleteMovie(parseInt(req.params.id, 10));
+  res.json({ success: true });
+});
+
+// DELETE /api/admin/episodes/:id
+app.delete('/api/admin/episodes/:id', requireAdmin, (req, res) => {
+  db.deleteEpisode(parseInt(req.params.id, 10));
+  res.json({ success: true });
+});
+
 // ── Tag management ────────────────────────────────────────────────────────────
 app.patch('/api/admin/movies/:id/tags', requireAdmin, express.json(), (req, res) => {
   const id   = parseInt(req.params.id, 10);

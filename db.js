@@ -264,6 +264,19 @@ function updateEpisodeUrl(id, embedUrl) {
   return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
 }
 
+function updateMovieUrl(id, embedUrl) {
+  db.prepare('UPDATE movies SET embed_url = ? WHERE id = ?').run(embedUrl, id);
+  return db.prepare('SELECT * FROM movies WHERE id = ?').get(id);
+}
+
+function deleteMovie(id) {
+  db.prepare('DELETE FROM movies WHERE id = ?').run(id);
+}
+
+function deleteEpisode(id) {
+  db.prepare('DELETE FROM episodes WHERE id = ?').run(id);
+}
+
 // showData: { title, channel, description, image_url }
 // seasons:  [{ season_number, episodes: [{ episode_number, name }] }]
 function addShowWithEpisodes(showData, seasons) {
@@ -414,7 +427,7 @@ function setTagsForMedia(type, id, tagNames) {
 }
 
 module.exports = {
-  getAllMovies, addMovie, getAllShows, updateEpisodeUrl, addShowWithEpisodes, importFromJson,
+  getAllMovies, addMovie, updateMovieUrl, deleteMovie, getAllShows, updateEpisodeUrl, deleteEpisode, addShowWithEpisodes, importFromJson,
   getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser, updateLastLogin,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,

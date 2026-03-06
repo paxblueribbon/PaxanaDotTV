@@ -637,6 +637,7 @@ footer {
 }
 
 .poster-wrap {
+  position: relative;
   width: 100%;
   aspect-ratio: 2 / 3;
   background: #111;
@@ -919,6 +920,60 @@ footer {
 }
 
 .episode-item.unavailable:hover .ep-add { color: #888; }
+
+.ep-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.ep-admin-btn {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  color: #3a3a3a;
+  font-family: inherit;
+  background: none;
+  border: 1px solid #222;
+  cursor: pointer;
+  padding: 0.15rem 0.45rem;
+  transition: color 0.2s, border-color 0.2s;
+  line-height: 1.4;
+}
+.ep-admin-btn:hover { color: #c4b5fd; border-color: #5b3d8a; }
+.ep-admin-btn-del:hover { color: #e63946 !important; border-color: #4a1218 !important; }
+
+/* ── Admin card overlay buttons ── */
+.admin-card-actions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.media-card:hover .admin-card-actions { opacity: 1; }
+
+.admin-card-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-top: 1px solid #333;
+  color: #888;
+  font-family: inherit;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  padding: 0.4rem 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.admin-card-btn + .admin-card-btn { border-left: 1px solid #333; }
+.admin-card-btn:hover { color: #c4b5fd; background: rgba(92, 61, 138, 0.3); }
+.admin-card-btn-del:hover { color: #e63946 !important; background: rgba(74, 18, 24, 0.4) !important; }
 
 /* ── Upload button ── */
 #upload-btn {

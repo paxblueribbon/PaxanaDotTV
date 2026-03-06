@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import EpisodeUploadModal from './EpisodeUploadModal'
 
-export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, isAdmin, onTagClick }) {
+export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, onEpisodeDeleted, isAdmin, onTagClick }) {
   const [seasonIdx, setSeasonIdx] = useState(0)
   const [editEp, setEditEp]       = useState(null) // { id, episode_number, episode_title, season }
 
@@ -15,6 +15,13 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, i
   function handleSuccess(episodeId, embedUrl) {
     setEditEp(null)
     onEpisodeUpdated(episodeId, embedUrl)
+  }
+
+  async function handleDeleteEpisode(e, epId) {
+    e.stopPropagation()
+    if (!confirm('Remove this episode? This cannot be undone.')) return
+    const res = await fetch(`/api/admin/episodes/${epId}`, { method: 'DELETE' })
+    if (res.ok) onEpisodeDeleted?.(epId)
   }
 
   if (!season) {
@@ -86,17 +93,32 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, i
               >
                 <span className="ep-num">E{ep.episode_number}</span>
                 <span className="ep-title">{ep.episode_title}</span>
-                {available
-                  ? <span className="ep-watch">watch →</span>
-                  : isAdmin && (
-                    <button
-                      className="ep-add"
-                      onClick={e => { e.stopPropagation(); setEditEp({ ...ep, season: season.season }) }}
-                    >
-                      add →
-                    </button>
-                  )
-                }
+                {available ? (
+                  <div className="ep-actions">
+                    <span className="ep-watch">watch →</span>
+                    {isAdmin && (
+                      <>
+                        <button
+                          className="ep-admin-btn"
+                          onClick={e => { e.stopPropagation(); setEditEp({ ...ep, season: season.season }) }}
+                          title="Edit MEGA link"
+                        >edit</button>
+                        <button
+                          className="ep-admin-btn ep-admin-btn-del"
+                          onClick={e => handleDeleteEpisode(e, ep.id)}
+                          title="Remove episode"
+                        >✕</button>
+                      </>
+                    )}
+                  </div>
+                ) : isAdmin && (
+                  <button
+                    className="ep-add"
+                    onClick={e => { e.stopPropagation(); setEditEp({ ...ep, season: season.season }) }}
+                  >
+                    add →
+                  </button>
+                )}
               </div>
             )
           })}
