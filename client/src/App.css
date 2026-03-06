@@ -778,6 +778,25 @@ footer {
 }
 
 /* ── Show detail view ── */
+.show-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.show-delete-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #555;
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.show-delete-btn:hover { color: #e63946; border-color: #4a1218; }
+
 #show-detail-view {
   display: flex;
   flex-direction: column;

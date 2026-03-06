@@ -17,6 +17,12 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
     onEpisodeUpdated(episodeId, embedUrl)
   }
 
+  async function handleDeleteShow() {
+    if (!confirm(`Remove "${show.title}" and all its episodes? This cannot be undone.`)) return
+    const res = await fetch(`/api/admin/shows/${show.id}`, { method: 'DELETE' })
+    if (res.ok) onBack()
+  }
+
   async function handleClearEpisode(e, epId) {
     e.stopPropagation()
     if (!confirm('Clear the MEGA link for this episode?')) return
@@ -27,7 +33,12 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
   if (!season) {
     return (
       <div id="show-detail-view">
-        <button id="back-btn" onClick={onBack}>← back</button>
+        <div className="show-nav-row">
+          <button id="back-btn" onClick={onBack}>← back</button>
+          {isAdmin && (
+            <button className="show-delete-btn" onClick={handleDeleteShow}>remove show</button>
+          )}
+        </div>
         <div id="show-header">
           <img id="show-poster" src={show.image_url} alt={show.title} />
           <div id="show-info">
@@ -50,7 +61,12 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
 
   return (
     <div id="show-detail-view">
-      <button id="back-btn" onClick={onBack}>← back</button>
+      <div className="show-nav-row">
+        <button id="back-btn" onClick={onBack}>← back</button>
+        {isAdmin && (
+          <button className="show-delete-btn" onClick={handleDeleteShow}>remove show</button>
+        )}
+      </div>
 
       <div id="show-header">
         <img id="show-poster" src={show.image_url} alt={show.title} />
