@@ -820,10 +820,7 @@ app.post('/api/episodes/:id/upload', requireAdmin, upload.single('file'), async 
     const storage  = await getMegaStorage();
 
     // Look up episode + show for proper naming/subfolder
-    const epInfo = db.prepare(
-      'SELECT e.season, e.episode_number, e.episode_title, s.title AS show_title ' +
-      'FROM episodes e JOIN shows s ON s.id = e.show_id WHERE e.id = ?'
-    ).get(id);
+    const epInfo = db.getEpisodeInfo(id);
 
     let safeName, folder;
     if (epInfo) {
