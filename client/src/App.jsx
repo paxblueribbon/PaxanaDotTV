@@ -9,6 +9,7 @@ import AddShowModal from './components/AddShowModal'
 import AdminPanel from './components/AdminPanel'
 import RecommendModal from './components/RecommendModal'
 import SearchBar from './components/SearchBar'
+import UploadQueue from './components/UploadQueue'
 
 export default function App() {
   const [user, setUser]             = useState(null)
@@ -222,6 +223,8 @@ export default function App() {
       {showRecommend && (
         <RecommendModal onClose={() => setShowRecommend(false)} />
       )}
+
+      <UploadQueue />
     </>
   )
 }

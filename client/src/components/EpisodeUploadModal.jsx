@@ -1,36 +1,18 @@
 import { useState, useRef } from 'react'
-
-function xhrUpload(url, body, onProgress, onServerReceived) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', url)
-    xhr.upload.onprogress = e => {
-      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
-    }
-    xhr.upload.onload = () => onServerReceived()
-    xhr.onload = () => {
-      try {
-        const data = JSON.parse(xhr.responseText)
-        if (xhr.status >= 200 && xhr.status < 300) resolve(data)
-        else reject(new Error(data.error || 'Upload failed'))
-      } catch { reject(new Error('Upload failed')) }
-    }
-    xhr.onerror = () => reject(new Error('Network error'))
-    xhr.send(body)
-  })
-}
+import { useUploads } from '../UploadContext'
 
 export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
+  const { startUpload } = useUploads()
+
   const [mode, setMode]         = useState('url')   // 'url' | 'upload'
   const [megaUrl, setMegaUrl]   = useState('')
   const [file, setFile]         = useState(null)
   const [status, setStatus]     = useState('idle')  // idle | saving | error
   const [errorMsg, setErrorMsg] = useState('')
-  const [progress, setProgress] = useState(null)    // null | 0-100 | 'mega'
   const fileRef = useRef()
 
-  const busy     = status === 'saving'
-  const epLabel  = `S${episode.season} E${episode.episode_number}${episode.episode_title ? ' · ' + episode.episode_title : ''}`
+  const busy    = status === 'saving'
+  const epLabel = `S${episode.season} E${episode.episode_number}${episode.episode_title ? ' · ' + episode.episode_title : ''}`
 
   async function handleSetUrl(e) {
     e.preventDefault()
@@ -52,27 +34,20 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
     }
   }
 
-  async function handleUpload(e) {
+  function handleUpload(e) {
     e.preventDefault()
     if (!file) return setErrorMsg('Select a video file first.')
-    setStatus('saving')
-    setProgress(0)
-    setErrorMsg('')
+
     const body = new FormData()
     body.append('file', file)
-    try {
-      const data = await xhrUpload(
-        `/api/episodes/${episode.id}/upload`,
-        body,
-        pct => setProgress(pct),
-        () => setProgress('mega'),
-      )
-      onSuccess(episode.id, data.episode.embed_url)
-    } catch (err) {
-      setErrorMsg(err.message)
-      setStatus('error')
-      setProgress(null)
-    }
+
+    startUpload({
+      label:     epLabel,
+      url:       `/api/episodes/${episode.id}/upload`,
+      body,
+      onSuccess: data => onSuccess(episode.id, data.episode.embed_url),
+    })
+    onClose()
   }
 
   return (
@@ -118,18 +93,6 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
 
           {errorMsg && <p id="upload-error">{errorMsg}</p>}
 
-          {busy && mode === 'upload' && (
-            <div id="upload-progress-wrap">
-              <div
-                id="upload-progress-bar"
-                className={progress === 'mega' ? 'indeterminate' : ''}
-                style={progress !== 'mega' ? { width: `${progress}%` } : {}}
-              />
-              <span id="upload-progress-label">
-                {progress === 'mega' ? 'uploading to MEGA…' : `uploading… ${progress}%`}
-              </span>
-            </div>
-          )}
           {busy && mode === 'url' && (
             <p id="upload-status">saving…</p>
           )}
@@ -137,9 +100,7 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
           <div id="modal-actions">
             <button type="button" onClick={onClose} disabled={busy}>cancel</button>
             <button type="submit" id="upload-submit" disabled={busy}>
-              {busy
-                ? (mode === 'upload' ? 'uploading…' : 'saving…')
-                : (mode === 'upload' ? 'upload' : 'save')}
+              {busy ? 'saving…' : (mode === 'upload' ? 'upload' : 'save')}
             </button>
           </div>
         </form>
