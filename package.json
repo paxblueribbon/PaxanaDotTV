@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "concurrently -n server,client -c cyan,magenta \"node server.js\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client",
-    "install:all": "npm install && npm install --prefix client"
+    "install:all": "npm install && npm install --prefix client",
+    "update": "git pull origin claude/shared-video-streaming-qpbZ9 && npm run build --prefix client"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
