@@ -77,6 +77,29 @@ function timeAgo(isoString) {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+function fmt(bytes) {
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB'
+  return (bytes / 1048576).toFixed(0) + ' MB'
+}
+
+function fmtUptime(seconds) {
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (d > 0) return `${d}d ${h}h ${m}m`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+function StatBar({ pct, warn = 60, danger = 85 }) {
+  const color = pct >= danger ? '#e05252' : pct >= warn ? '#e09c2f' : '#4caf7d'
+  return (
+    <div className="stat-bar-track">
+      <div className="stat-bar-fill" style={{ width: `${pct.toFixed(1)}%`, background: color }} />
+    </div>
+  )
+}
+
 export default function AdminPanel({ user }) {
   const [users, setUsers]           = useState([])
   const [inviteRole, setInviteRole] = useState('user')
@@ -91,7 +114,21 @@ export default function AdminPanel({ user }) {
   const [tagMovies,   setTagMovies]   = useState([])
   const [tagShows,    setTagShows]    = useState([])
 
+  const [stats, setStats] = useState(null)
+
   useEffect(() => { loadUsers(); loadRecs(); loadTagItems() }, [])
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/admin/stats')
+        if (res.ok) setStats(await res.json())
+      } catch {}
+    }
+    fetchStats()
+    const interval = setInterval(fetchStats, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function loadUsers() {
     const res  = await fetch('/api/admin/users')
@@ -162,6 +199,35 @@ export default function AdminPanel({ user }) {
 
   return (
     <div id="admin-panel">
+
+      {/* ── Server Stats ── */}
+      <section id="admin-stats-section">
+        <h2 className="admin-heading">server health</h2>
+        {stats ? (
+          <div className="stats-grid">
+            <div className="stat-card">
+              <span className="stat-label">cpu load</span>
+              <StatBar pct={stats.cpuLoadPct} />
+              <span className="stat-value">{stats.cpuLoadPct.toFixed(1)}% <span className="stat-sub">({stats.loadAvg1m.toFixed(2)} avg / {stats.cpuCount} cores)</span></span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">memory</span>
+              <StatBar pct={stats.memUsedPct} />
+              <span className="stat-value">{fmt(stats.memUsed)} / {fmt(stats.memTotal)} <span className="stat-sub">({stats.memUsedPct.toFixed(1)}%)</span></span>
+            </div>
+            <div className="stat-card stat-card--inline">
+              <span className="stat-label">uptime</span>
+              <span className="stat-value">{fmtUptime(stats.uptime)}</span>
+            </div>
+            <div className="stat-card stat-card--inline">
+              <span className="stat-label">active streams</span>
+              <span className={`stat-value${stats.activeStreams > 0 ? ' stat-live' : ''}`}>{stats.activeStreams}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="admin-hint">Loading…</p>
+        )}
+      </section>
 
       {/* ── Recommendations ── */}
       <section id="admin-recs-section">

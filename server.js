@@ -12,6 +12,7 @@ const { spawn } = require('child_process');
 const multer = require('multer');
 const { Storage } = require('megajs');
 const ffmpegPath = require('ffmpeg-static');
+const os = require('os');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const SESSION_COOKIE = 'paxana_session';
@@ -580,6 +581,24 @@ app.patch('/api/admin/shows/:id/tags', requireAdmin, express.json(), (req, res) 
   const tags = Array.isArray(req.body.tags) ? req.body.tags : [];
   db.setTagsForMedia('show', id, tags);
   res.json({ success: true });
+});
+
+app.get('/api/admin/stats', requireAdmin, (_req, res) => {
+  const memTotal   = os.totalmem();
+  const memFree    = os.freemem();
+  const cpuCount   = os.cpus().length;
+  const loadAvg1m  = os.loadavg()[0];
+  res.json({
+    uptime:        process.uptime(),
+    loadAvg1m,
+    cpuCount,
+    cpuLoadPct:    Math.min(100, (loadAvg1m / cpuCount) * 100),
+    memTotal,
+    memFree,
+    memUsed:       memTotal - memFree,
+    memUsedPct:    ((memTotal - memFree) / memTotal) * 100,
+    activeStreams:  activeStreams.size,
+  });
 });
 
 // Serve catalogue data from the database

@@ -282,6 +282,56 @@ header .tv-suffix { color: #7c5fa0; }
   margin-top: 0.75rem;
 }
 
+/* ── Server stats ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.stat-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.stat-card--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.stat-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+}
+.stat-value {
+  font-size: 0.8rem;
+  color: #ccc;
+}
+.stat-sub {
+  font-size: 0.65rem;
+  color: #555;
+}
+.stat-live {
+  color: #4caf7d;
+}
+.stat-bar-track {
+  height: 5px;
+  background: #222;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease, background 0.4s ease;
+}
+
 /* ── Channel list view ── */
 #channel-list-view {
   width: min(900px, 96vw);
