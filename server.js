@@ -239,7 +239,7 @@ const nms = new NodeMediaServer({
   rtmp: {
     port: RTMP_PORT,
     host: '127.0.0.1', // localhost only — ffmpeg pushes locally, no public RTMP
-    chunk_size: 60000,
+    chunk_size: 4096,
     gop_cache: true,
     ping: 30,
     ping_timeout: 60,
@@ -910,14 +910,14 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
 
   const proc = spawn(binary, [
     '-re',
+    '-fflags', '+genpts',
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
     '-i', concatPath,
     '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'ultrafast', '-tune', 'zerolatency',
-    '-x264opts', 'keyint=120:min-keyint=120:scenecut=0',
+    '-x264opts', `threads=2:keyint=120:min-keyint=120:scenecut=0`,
     '-pix_fmt', 'yuv420p',
     '-vf', 'fps=30',
-    '-threads', '2',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-f', 'flv', rtmpUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
