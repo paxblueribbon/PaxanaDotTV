@@ -239,7 +239,7 @@ const nms = new NodeMediaServer({
   rtmp: {
     port: RTMP_PORT,
     host: '127.0.0.1', // localhost only — ffmpeg pushes locally, no public RTMP
-    chunk_size: 4096,
+    chunk_size: 60000,
     gop_cache: true,
     ping: 30,
     ping_timeout: 60,
