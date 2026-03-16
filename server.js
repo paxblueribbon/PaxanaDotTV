@@ -220,7 +220,12 @@ const upload = multer({ storage: uploadStorage });
 
 const HTTP_PORT = process.env.PORT || 3000;
 const RTMP_PORT = 1935;
-const MEDIA_ROOT = path.join(__dirname, 'media');
+// Use a RAM disk for HLS segments if /dev/shm is available (Linux tmpfs).
+// Keeps segment writes/reads entirely in memory, eliminating disk I/O as a
+// stutter source. Falls back to the on-disk directory if not available.
+const MEDIA_ROOT = fs.existsSync('/dev/shm')
+  ? '/dev/shm/paxana-media'
+  : path.join(__dirname, 'media');
 
 // Tracks which stream keys are currently publishing
 const activeStreams   = new Set();
@@ -912,6 +917,7 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
     '-re',
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
+    '-thread_queue_size', '1024',
     '-i', concatPath,
     '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'ultrafast', '-tune', 'zerolatency',
     '-x264opts', `threads=2:keyint=120:min-keyint=120:scenecut=0`,
