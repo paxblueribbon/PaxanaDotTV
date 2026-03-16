@@ -927,17 +927,53 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
     '-f', 'flv', rtmpUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
+  // Watch HLS output directory so we can log segment timing.
+  // Segments should arrive every ~4s; big gaps mean the pipeline is stalling.
+  const hlsDir = path.join(MEDIA_ROOT, 'live', key);
+  fs.mkdirSync(hlsDir, { recursive: true });
+  let lastSegTime = null;
+  const segWatcher = fs.watch(hlsDir, (event, filename) => {
+    if (!filename || !filename.endsWith('.ts')) return;
+    if (!fs.existsSync(path.join(hlsDir, filename))) return; // deletion, skip
+    const now = Date.now();
+    if (lastSegTime !== null) {
+      const gap = ((now - lastSegTime) / 1000).toFixed(1);
+      if (parseFloat(gap) > 6) {
+        console.warn(`[hls/${key}] ⚠  segment gap ${gap}s (expected ~4s) — ${filename}`);
+      } else {
+        console.log(`[hls/${key}] segment +${gap}s — ${filename}`);
+      }
+    } else {
+      console.log(`[hls/${key}] first segment written — ${filename}`);
+    }
+    lastSegTime = now;
+  });
+
+  // ffmpeg writes real-time progress stats with \r, not \n, so split on both.
+  // Extract speed= to catch when the encoder falls behind real-time (speed < 1).
   let stderrBuf = '';
   proc.stderr.on('data', chunk => {
     stderrBuf += chunk.toString('utf8');
-    let nl;
-    while ((nl = stderrBuf.indexOf('\n')) !== -1) {
-      process.stderr.write(`[ffmpeg/${key}] ${stderrBuf.slice(0, nl + 1)}`);
-      stderrBuf = stderrBuf.slice(nl + 1);
+    let sep;
+    while ((sep = stderrBuf.search(/[\r\n]/)) !== -1) {
+      const line = stderrBuf.slice(0, sep).trim();
+      stderrBuf = stderrBuf.slice(sep + 1);
+      if (!line) continue;
+      const speedMatch = line.match(/speed=\s*([\d.]+)x/);
+      if (speedMatch) {
+        const speed = parseFloat(speedMatch[1]);
+        const fps   = (line.match(/fps=\s*([\d.]+)/) || [])[1] ?? '?';
+        if (speed < 0.95) {
+          console.warn(`[ffmpeg/${key}] ⚠  encoder behind real-time: speed=${speed.toFixed(2)}x fps=${fps}`);
+        }
+      } else {
+        process.stderr.write(`[ffmpeg/${key}] ${line}\n`);
+      }
     }
   });
   proc.stderr.on('end', () => {
-    if (stderrBuf) process.stderr.write(`[ffmpeg/${key}] ${stderrBuf}\n`);
+    if (stderrBuf.trim()) process.stderr.write(`[ffmpeg/${key}] ${stderrBuf.trim()}\n`);
+    segWatcher.close();
   });
 
   proc.on('error', err => {
