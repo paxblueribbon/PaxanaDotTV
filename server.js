@@ -913,10 +913,11 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
     '-i', concatPath,
-    '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'veryfast',
+    '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'ultrafast', '-tune', 'zerolatency',
     '-x264opts', 'keyint=120:min-keyint=120:scenecut=0',
     '-pix_fmt', 'yuv420p',
     '-vf', 'fps=30',
+    '-threads', '2',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-f', 'flv', rtmpUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
