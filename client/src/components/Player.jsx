@@ -121,10 +121,10 @@ export default function Player({ channelKey, onBack }) {
     }
 
     const hls = new Hls({
-      liveSyncDurationCount:       3,
-      liveMaxLatencyDurationCount: 10,
-      maxBufferLength:             60,
-      backBufferLength:            30,
+      liveSyncDurationCount:       3,   // target 3 segments (12s) behind live
+      liveMaxLatencyDurationCount: 5,   // snap back if >5 segments (20s) behind — was 10 (40s)
+      maxBufferLength:             20,  // 20s is plenty for live — was 60s
+      backBufferLength:            0,   // no back buffer needed for live
       lowLatencyMode:              false,
       xhrSetup(xhr) { xhr.setRequestHeader('Cache-Control', 'no-cache') },
     })
