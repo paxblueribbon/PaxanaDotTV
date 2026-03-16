@@ -910,7 +910,6 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
 
   const proc = spawn(binary, [
     '-re',
-    '-fflags', '+genpts',
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
     '-i', concatPath,
