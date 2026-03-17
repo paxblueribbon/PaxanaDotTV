@@ -1,7 +1,9 @@
 function buildEmbedUrl(raw) {
   const s = raw.trim()
-  if (s.startsWith('https://')) return s
-  return `https://mega.nz/embed/${s}`
+  // Normalize any full Mega URL (file, embed, legacy #!) to an embed URL.
+  // A bare ID#key is passed through directly.
+  const match = s.match(/mega\.nz\/(?:file|embed|#!)\/([^\s?]+)/)
+  return `https://mega.nz/embed/${match ? match[1] : s}`
 }
 
 export default function MegaPlayer({ title, subtitle, embedUrl, onBack, tags, onTagClick }) {
