@@ -648,7 +648,9 @@ app.get('/channels', (req, res) => {
 // Check if a specific channel is live
 app.get('/status/:channel', (req, res) => {
   const { channel } = req.params;
-  const live = activeStreams.has(channel);
+  // Show channels now write HLS directly (tracked via ffmpegProcesses).
+  // External RTMP pushes are tracked via activeStreams.
+  const live = ffmpegProcesses.has(channel) || activeStreams.has(channel);
   res.json({ live, streamKey: channel });
 });
 
@@ -898,7 +900,7 @@ app.get('/api/show-channels', (req, res) => {
       const key      = showNameToKey(name);
       const showDir  = path.join(SHOWS_DIR, name);
       const videos   = getVideoFiles(showDir);
-      return { name, key, live: activeStreams.has(key), episodeCount: videos.length };
+      return { name, key, live: ffmpegProcesses.has(key) || activeStreams.has(key), episodeCount: videos.length };
     });
     res.json({ channels });
   } catch (err) {
@@ -909,9 +911,15 @@ app.get('/api/show-channels', (req, res) => {
 // Keys that were intentionally stopped — don't auto-restart these.
 const stoppedChannels = new Set();
 
-function launchFfmpeg(key, name, concatPath, rtmpUrl) {
+function launchFfmpeg(key, name, concatPath) {
   if (stoppedChannels.has(key)) return; // stop was requested, don't restart
   const binary = process.env.FFMPEG_PATH || ffmpegPath;
+
+  // Write HLS segments directly to the media root — no RTMP roundtrip.
+  // This eliminates the second ffmpeg process (NMS transcoding) and all
+  // RTMP connection jitter that was causing segment gaps and stutter.
+  const hlsDir = path.join(MEDIA_ROOT, 'live', key);
+  fs.mkdirSync(hlsDir, { recursive: true });
 
   const proc = spawn(binary, [
     '-re',
@@ -920,17 +928,17 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
     '-thread_queue_size', '1024',
     '-i', concatPath,
     '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'ultrafast', '-tune', 'zerolatency',
-    '-x264opts', `threads=2:keyint=120:min-keyint=120:scenecut=0`,
+    '-x264opts', 'threads=2:keyint=120:min-keyint=120:scenecut=0',
     '-pix_fmt', 'yuv420p',
     '-vf', 'fps=30',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-    '-f', 'flv', rtmpUrl,
+    '-f', 'hls',
+    '-hls_time', '4',
+    '-hls_list_size', '10',
+    '-hls_flags', 'delete_segments',
+    '-hls_segment_filename', path.join(hlsDir, '%05d.ts'),
+    path.join(hlsDir, 'index.m3u8'),
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-  // Watch HLS output directory so we can log segment timing.
-  // Segments should arrive every ~4s; big gaps mean the pipeline is stalling.
-  const hlsDir = path.join(MEDIA_ROOT, 'live', key);
-  fs.mkdirSync(hlsDir, { recursive: true });
   let lastSegTime = null;
   const segWatcher = fs.watch(hlsDir, (event, filename) => {
     if (!filename || !filename.endsWith('.ts')) return;
@@ -985,12 +993,12 @@ function launchFfmpeg(key, name, concatPath, rtmpUrl) {
     ffmpegProcesses.delete(key);
     if (!stoppedChannels.has(key)) {
       console.log(`[ffmpeg] Auto-restarting "${name}" in 2s…`);
-      setTimeout(() => launchFfmpeg(key, name, concatPath, rtmpUrl), 2000);
+      setTimeout(() => launchFfmpeg(key, name, concatPath), 2000);
     }
   });
 
   ffmpegProcesses.set(key, proc);
-  console.log(`[ffmpeg] Launched "${name}" → ${rtmpUrl} (pid=${proc.pid})`);
+  console.log(`[ffmpeg] Launched "${name}" → HLS direct (pid=${proc.pid})`);
 }
 
 // POST /api/show-channels/:key/launch — build concat file and start ffmpeg
@@ -1007,10 +1015,9 @@ app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
   if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
 
   const concatPath = buildConcatFile(showDir, videos);
-  const rtmpUrl    = `rtmp://localhost/live/${key}`;
 
   stoppedChannels.delete(key);
-  launchFfmpeg(key, name, concatPath, rtmpUrl);
+  launchFfmpeg(key, name, concatPath);
   res.json({ success: true, key });
 });
 
@@ -1052,8 +1059,7 @@ app.listen(HTTP_PORT, () => {
           continue;
         }
         const concatPath = buildConcatFile(showDir, videos);
-        const rtmpUrl    = `rtmp://localhost/live/${key}`;
-        launchFfmpeg(key, name, concatPath, rtmpUrl);
+        launchFfmpeg(key, name, concatPath);
       }
     } catch (err) {
       console.error('[autoLaunch] Error:', err.message);
