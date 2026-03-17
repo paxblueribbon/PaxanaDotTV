@@ -1035,4 +1035,28 @@ app.listen(HTTP_PORT, () => {
 │  HLS output : /hls/live/<channel-key>/index.m3u8    │
 └──────────────────────────────────────────────────────┘
 `);
+
+  // Auto-launch all show channels a few seconds after startup so NMS is ready
+  setTimeout(() => {
+    try {
+      const folders = getShowFolders();
+      if (folders.length === 0) return;
+      console.log(`[autoLaunch] Starting ${folders.length} show channel(s)…`);
+      for (const name of folders) {
+        const key = showNameToKey(name);
+        if (ffmpegProcesses.has(key)) continue;
+        const showDir = path.join(SHOWS_DIR, name);
+        const videos  = getVideoFiles(showDir);
+        if (videos.length === 0) {
+          console.log(`[autoLaunch] Skipping "${name}" — no video files`);
+          continue;
+        }
+        const concatPath = buildConcatFile(showDir, videos);
+        const rtmpUrl    = `rtmp://localhost/live/${key}`;
+        launchFfmpeg(key, name, concatPath, rtmpUrl);
+      }
+    } catch (err) {
+      console.error('[autoLaunch] Error:', err.message);
+    }
+  }, 5000); // 5 s gives NMS time to bind its RTMP port
 });
