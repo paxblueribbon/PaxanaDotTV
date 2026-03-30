@@ -17,7 +17,6 @@ export default function MegaPlayer({ title, subtitle, embedUrl, onBack, tags, on
           allowFullScreen
           allow="autoplay; fullscreen"
           frameBorder="0"
-          sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
         />
       </div>
       <div id="mega-meta">
