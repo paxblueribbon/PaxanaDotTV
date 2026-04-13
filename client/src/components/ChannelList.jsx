@@ -53,19 +53,29 @@ export default function ChannelList({ onWatch, isAdmin }) {
         )}
         {visible.map(ch => (
           <div key={ch.key}>
-            <div className={`channel-item${ch.live ? '' : ' offline'}`}>
-              <div className={`ch-dot${ch.live ? ' live' : ''}`} />
+            <div className={`channel-item${ch.live ? '' : ch.waiting ? ' waiting' : ' offline'}`}>
+              <div className={`ch-dot${ch.live ? ' live' : ch.waiting ? ' waiting' : ''}`} />
 
               <div className="channel-key">
                 {ch.name}
-                {isAdmin && (
+                {isAdmin && !ch.obsOnly && (
                   <span className="ch-meta">{ch.episodeCount} episode{ch.episodeCount !== 1 ? 's' : ''}</span>
+                )}
+                {isAdmin && ch.obsOnly && (
+                  <span className="ch-meta">OBS</span>
                 )}
               </div>
 
               {ch.live ? (
                 <div className="ch-actions">
                   <span className="watch-label" onClick={() => onWatch(ch.key)}>watch →</span>
+                  {isAdmin && (
+                    <button className="stop-btn" onClick={() => handleStop(ch.key)}>stop</button>
+                  )}
+                </div>
+              ) : ch.waiting ? (
+                <div className="ch-actions">
+                  <span className="waiting-label">awaiting stream…</span>
                   {isAdmin && (
                     <button className="stop-btn" onClick={() => handleStop(ch.key)}>stop</button>
                   )}
