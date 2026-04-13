@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const POLL_MS = 4000
 
@@ -7,21 +7,19 @@ export default function ChannelList({ onWatch, isAdmin }) {
   const [launching, setLaunching] = useState(new Set())
   const [errors, setErrors]       = useState({}) // key → error message
 
+  const refresh = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/show-channels')
+      const data = await res.json()
+      setChannels(data.channels || [])
+    } catch (_) {}
+  }, [])
+
   useEffect(() => {
-    let cancelled = false
-
-    async function refresh() {
-      try {
-        const res  = await fetch('/api/show-channels')
-        const data = await res.json()
-        if (!cancelled) setChannels(data.channels || [])
-      } catch (_) {}
-    }
-
     refresh()
     const id = setInterval(refresh, POLL_MS)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [])
+    return () => clearInterval(id)
+  }, [refresh])
 
   async function handleLaunch(key) {
     setLaunching(s => new Set(s).add(key))
@@ -29,7 +27,11 @@ export default function ChannelList({ onWatch, isAdmin }) {
     try {
       const res  = await fetch(`/api/show-channels/${key}/launch`, { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) setErrors(e => ({ ...e, [key]: data.error || 'Launch failed' }))
+      if (!res.ok) {
+        setErrors(e => ({ ...e, [key]: data.error || 'Launch failed' }))
+      } else {
+        await refresh()
+      }
     } catch (err) {
       setErrors(e => ({ ...e, [key]: err.message }))
     }
