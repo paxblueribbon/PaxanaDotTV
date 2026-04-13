@@ -129,6 +129,10 @@ function getVideoFiles(showDir) {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
+function isObsOnlyChannel(showDir) {
+  return fs.existsSync(path.join(showDir, '.obs-only'));
+}
+
 // Generates an ffmpeg concat file listing all episodes.
 // Always regenerates so newly added files are picked up on next launch.
 function buildConcatFile(showDir, videoFiles) {
@@ -229,6 +233,8 @@ const MEDIA_ROOT = fs.existsSync('/dev/shm')
 
 // Tracks which stream keys are currently publishing
 const activeStreams   = new Set();
+// OBS-only channels that have been "launched" (waiting for OBS to connect)
+const waitingObs      = new Set();
 // Pending removal timers, cancelled if the stream reconnects within the grace period.
 // Kept as a safety net in case of brief RTMP hiccups.
 const streamEndTimers = new Map();
@@ -897,10 +903,13 @@ app.post('/api/episodes/:id/upload', requireAdmin, upload.single('file'), async 
 app.get('/api/show-channels', (req, res) => {
   try {
     const channels = getShowFolders().map(name => {
-      const key      = showNameToKey(name);
-      const showDir  = path.join(SHOWS_DIR, name);
-      const videos   = getVideoFiles(showDir);
-      return { name, key, live: ffmpegProcesses.has(key) || activeStreams.has(key), episodeCount: videos.length };
+      const key     = showNameToKey(name);
+      const showDir = path.join(SHOWS_DIR, name);
+      const obsOnly = isObsOnlyChannel(showDir);
+      const videos  = obsOnly ? [] : getVideoFiles(showDir);
+      const live    = ffmpegProcesses.has(key) || activeStreams.has(key);
+      const waiting = obsOnly && waitingObs.has(key) && !live;
+      return { name, key, live, waiting, obsOnly, episodeCount: videos.length };
     });
     res.json({ channels });
   } catch (err) {
@@ -1005,13 +1014,21 @@ function launchFfmpeg(key, name, concatPath) {
 app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
   const { key } = req.params;
 
-  if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
-
   const name = getShowFolders().find(n => showNameToKey(n) === key);
   if (!name) return res.status(404).json({ error: 'Show folder not found' });
 
   const showDir = path.join(SHOWS_DIR, name);
-  const videos  = getVideoFiles(showDir);
+
+  // OBS-only channel: mark as waiting for OBS to push a stream; no FFmpeg needed.
+  if (isObsOnlyChannel(showDir)) {
+    waitingObs.add(key);
+    stoppedChannels.delete(key);
+    return res.json({ success: true, key, obsOnly: true });
+  }
+
+  if (ffmpegProcesses.has(key)) return res.status(409).json({ error: 'Already launching or live' });
+
+  const videos = getVideoFiles(showDir);
   if (videos.length === 0) return res.status(400).json({ error: 'No video files in show folder' });
 
   const concatPath = buildConcatFile(showDir, videos);
@@ -1024,7 +1041,18 @@ app.post('/api/show-channels/:key/launch', requireAdmin, (req, res) => {
 // POST /api/show-channels/:key/stop — kill ffmpeg for this channel
 app.post('/api/show-channels/:key/stop', requireAdmin, (req, res) => {
   const { key } = req.params;
-  const proc    = ffmpegProcesses.get(key);
+
+  // For OBS-only channels, clear waiting/active state (RTMP disconnects naturally)
+  const obsName    = getShowFolders().find(n => showNameToKey(n) === key);
+  const obsShowDir = obsName ? path.join(SHOWS_DIR, obsName) : null;
+  if (obsShowDir && isObsOnlyChannel(obsShowDir)) {
+    waitingObs.delete(key);
+    activeStreams.delete(key);
+    stoppedChannels.add(key);
+    return res.json({ success: true });
+  }
+
+  const proc = ffmpegProcesses.get(key);
   if (!proc) return res.status(404).json({ error: 'No stream process for this channel' });
   stoppedChannels.add(key);   // prevent auto-restart
   proc.kill('SIGTERM');
@@ -1053,6 +1081,10 @@ app.listen(HTTP_PORT, () => {
         const key = showNameToKey(name);
         if (ffmpegProcesses.has(key)) continue;
         const showDir = path.join(SHOWS_DIR, name);
+        if (isObsOnlyChannel(showDir)) {
+          console.log(`[autoLaunch] Skipping "${name}" — OBS-only channel`);
+          continue;
+        }
         const videos  = getVideoFiles(showDir);
         if (videos.length === 0) {
           console.log(`[autoLaunch] Skipping "${name}" — no video files`);

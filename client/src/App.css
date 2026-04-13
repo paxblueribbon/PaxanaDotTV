@@ -369,6 +369,7 @@ header .tv-suffix { color: #7c5fa0; }
 .channel-item:hover { background: #0e0820; border-color: #3b1f6b; }
 .channel-item.offline { opacity: 0.55; }
 .channel-item.offline:hover { opacity: 1; }
+.channel-item.waiting { opacity: 0.8; }
 
 /* live/offline indicator dot */
 .ch-dot {
@@ -382,6 +383,17 @@ header .tv-suffix { color: #7c5fa0; }
 .ch-dot.live {
   background: #ff3b30;
   animation: pulse 1.4s ease-in-out infinite;
+}
+.ch-dot.waiting {
+  background: #c8a000;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.waiting-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a6200;
 }
 
 .channel-key {
