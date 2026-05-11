@@ -37,7 +37,7 @@ export function UploadProvider({ children }) {
       url,
       body,
       pct => update({ progress: pct }),
-      ()  => update({ progress: 'mega' }),
+      ()  => update({ progress: 'processing' }),
     ).then(data => {
       update({ status: 'done' })
       onSuccess?.(data)

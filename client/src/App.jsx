@@ -64,13 +64,13 @@ export default function App() {
     setActiveEpisode({ ep, seasonNum })
   }
 
-  function handleEpisodeUpdated(episodeId, embedUrl) {
+  function handleEpisodeUpdated(episodeId, update) {
     setActiveShow(show => ({
       ...show,
       seasons: show.seasons.map(s => ({
         ...s,
         episodes: s.episodes.map(ep =>
-          ep.id === episodeId ? { ...ep, embed_url: embedUrl } : ep
+          ep.id === episodeId ? { ...ep, ...update } : ep
         ),
       })),
     }))
@@ -105,6 +105,7 @@ export default function App() {
         title={activeMovie.title}
         subtitle={`${activeMovie.director} · ${activeMovie.release_year} · ${activeMovie.genre}`}
         embedUrl={activeMovie.embed_url}
+        videoUrl={activeMovie.video_source_type === 'direct' ? `/api/video/movie/${activeMovie.id}` : null}
         onBack={() => setActiveMovie(null)}
         tags={activeMovie.tags}
         onTagClick={tag => handleTagClick(tag, 'movies')}
@@ -116,6 +117,7 @@ export default function App() {
         title={activeShow.title}
         subtitle={`S${activeEpisode.seasonNum} E${activeEpisode.ep.episode_number} · ${activeEpisode.ep.episode_title}`}
         embedUrl={activeEpisode.ep.embed_url}
+        videoUrl={activeEpisode.ep.video_source_type === 'direct' ? `/api/video/episode/${activeEpisode.ep.id}` : null}
         onBack={() => setActiveEpisode(null)}
         tags={activeShow.tags}
         onTagClick={tag => handleTagClick(tag, 'tv')}

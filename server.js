@@ -222,6 +222,13 @@ const uploadStorage = multer.diskStorage({
 });
 const upload = multer({ storage: uploadStorage });
 
+// Persistent storage for directly uploaded video files
+const VIDEOS_DIR        = path.join(__dirname, 'videos');
+const VIDEOS_MOVIES_DIR = path.join(VIDEOS_DIR, 'movies');
+const VIDEOS_SHOWS_DIR  = path.join(VIDEOS_DIR, 'shows');
+fs.mkdirSync(VIDEOS_MOVIES_DIR, { recursive: true });
+fs.mkdirSync(VIDEOS_SHOWS_DIR,  { recursive: true });
+
 const HTTP_PORT = process.env.PORT || 3000;
 const RTMP_PORT = 1935;
 // Use a RAM disk for HLS segments if /dev/shm is available (Linux tmpfs).
@@ -758,6 +765,88 @@ app.post('/api/movies/from-url', requireAdmin, express.json(), (req, res) => {
   }
 });
 
+// ── Direct movie upload (no MEGA) ─────────────────────────────────────────────
+// POST /api/movies/direct  multipart/form-data
+//   file, title, director, year, genre, poster_url
+app.post('/api/movies/direct', requireAdmin, upload.single('file'), async (req, res) => {
+  const { title, director, year, genre, poster_url } = req.body;
+
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+  if (!title)    return res.status(400).json({ error: 'Title is required' });
+
+  const uploadPath = req.file.path;
+  let convertedPath = null;
+
+  try {
+    const isMkv = path.extname(req.file.filename).toLowerCase() === '.mkv';
+    if (isMkv) {
+      console.log(`[direct] Converting MKV→MP4: ${req.file.filename}`);
+      convertedPath = await convertToMp4(uploadPath);
+    }
+    const filePath = convertedPath || uploadPath;
+
+    const safeName  = `${Date.now()}_${title.trim().replace(/[^\w\s.()\-]/g, '').replace(/\s+/g, '_')}.mp4`;
+    const destPath  = path.join(VIDEOS_MOVIES_DIR, safeName);
+    fs.renameSync(filePath, destPath);
+
+    const movie = db.addMovie({
+      title:             title.trim(),
+      director:          (director   || '').trim(),
+      release_year:      year ? parseInt(year, 10) : null,
+      genre:             (genre      || '').trim(),
+      poster_url:        (poster_url || '').trim(),
+      embed_url:         '',
+      video_source_type: 'direct',
+      local_path:        destPath,
+    });
+
+    console.log(`[direct] Saved movie: ${destPath}`);
+    res.json({ success: true, movie });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { if (fs.existsSync(uploadPath)) fs.unlinkSync(uploadPath); } catch (_) {}
+    if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
+  }
+});
+
+// ── Stream directly-uploaded movie ───────────────────────────────────────────
+// GET /api/video/movie/:id
+app.get('/api/video/movie/:id', requireAuth, (req, res) => {
+  const movie = db.getMovieById(parseInt(req.params.id, 10));
+  if (!movie || movie.video_source_type !== 'direct' || !movie.local_path) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!fs.existsSync(movie.local_path)) {
+    return res.status(404).json({ error: 'Video file missing on server' });
+  }
+
+  const stat     = fs.statSync(movie.local_path);
+  const fileSize = stat.size;
+  const range    = req.headers.range;
+
+  if (range) {
+    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
+    const start     = parseInt(startStr, 10);
+    const end       = endStr ? parseInt(endStr, 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+    res.writeHead(206, {
+      'Content-Range':  `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges':  'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type':   'video/mp4',
+    });
+    fs.createReadStream(movie.local_path, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Accept-Ranges':  'bytes',
+      'Content-Type':   'video/mp4',
+    });
+    fs.createReadStream(movie.local_path).pipe(res);
+  }
+});
+
 // ── TMDB movie lookup ─────────────────────────────────────────────────────────
 // GET /api/tmdb/movie/:tmdbId — returns pre-formatted fields for the upload modal
 app.get('/api/tmdb/movie/:tmdbId', requireAuth, async (req, res) => {
@@ -895,6 +984,88 @@ app.post('/api/episodes/:id/upload', requireAdmin, upload.single('file'), async 
   } finally {
     try { fs.unlinkSync(uploadPath); } catch (_) {}
     if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
+  }
+});
+
+// ── Direct episode upload (no MEGA) ──────────────────────────────────────────
+// POST /api/episodes/:id/upload/direct  multipart: { file }
+app.post('/api/episodes/:id/upload/direct', requireAdmin, upload.single('file'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id)       return res.status(400).json({ error: 'Invalid episode id' });
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+  const uploadPath    = req.file.path;
+  let   convertedPath = null;
+
+  try {
+    const isMkv = path.extname(req.file.filename).toLowerCase() === '.mkv';
+    if (isMkv) {
+      console.log(`[direct] Converting MKV→MP4: ${req.file.filename}`);
+      convertedPath = await convertToMp4(uploadPath);
+    }
+    const filePath = convertedPath || uploadPath;
+
+    const epInfo   = db.getEpisodeInfo(id);
+    let   safeName;
+    if (epInfo) {
+      const sanitize  = str => str.replace(/[/\\:*?"<>|]/g, '').trim();
+      const showTitle = sanitize(epInfo.show_title);
+      const epTitle   = sanitize(epInfo.episode_title);
+      const season    = String(epInfo.season).padStart(2, '0');
+      const epNum     = String(epInfo.episode_number).padStart(2, '0');
+      safeName = `${Date.now()}_${showTitle}_S${season}E${epNum}${epTitle ? `_${epTitle}` : ''}.mp4`;
+    } else {
+      safeName = `${Date.now()}_ep_${id}.mp4`;
+    }
+
+    const destPath = path.join(VIDEOS_SHOWS_DIR, safeName);
+    fs.renameSync(filePath, destPath);
+
+    const episode = db.updateEpisodeDirect(id, destPath);
+    console.log(`[direct] Saved episode: ${destPath}`);
+    res.json({ success: true, episode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { if (fs.existsSync(uploadPath)) fs.unlinkSync(uploadPath); } catch (_) {}
+    if (convertedPath) try { fs.unlinkSync(convertedPath); } catch (_) {}
+  }
+});
+
+// ── Stream directly-uploaded episode ─────────────────────────────────────────
+// GET /api/video/episode/:id
+app.get('/api/video/episode/:id', requireAuth, (req, res) => {
+  const episode = db.getEpisodeById(parseInt(req.params.id, 10));
+  if (!episode || episode.video_source_type !== 'direct' || !episode.local_path) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!fs.existsSync(episode.local_path)) {
+    return res.status(404).json({ error: 'Video file missing on server' });
+  }
+
+  const stat     = fs.statSync(episode.local_path);
+  const fileSize = stat.size;
+  const range    = req.headers.range;
+
+  if (range) {
+    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
+    const start     = parseInt(startStr, 10);
+    const end       = endStr ? parseInt(endStr, 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+    res.writeHead(206, {
+      'Content-Range':  `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges':  'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type':   'video/mp4',
+    });
+    fs.createReadStream(episode.local_path, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Accept-Ranges':  'bytes',
+      'Content-Type':   'video/mp4',
+    });
+    fs.createReadStream(episode.local_path).pipe(res);
   }
 });
 

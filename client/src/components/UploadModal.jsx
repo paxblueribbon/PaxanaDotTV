@@ -12,7 +12,7 @@ const FIELDS = [
 export default function UploadModal({ onClose, onSuccess }) {
   const { startUpload } = useUploads()
 
-  const [mode, setMode]         = useState('upload') // 'upload' | 'url'
+  const [mode, setMode]         = useState('upload') // 'upload' | 'url' ('upload' = direct, 'url' = mega link)
   const [fields, setFields]     = useState({ title: '', director: '', year: '', genre: '', poster_url: '' })
   const [file, setFile]         = useState(null)
   const [megaUrl, setMegaUrl]   = useState('')
@@ -82,7 +82,7 @@ export default function UploadModal({ onClose, onSuccess }) {
 
     startUpload({
       label:     fields.title || file.name,
-      url:       '/api/movies',
+      url:       '/api/movies/direct',
       body,
       onSuccess: data => onSuccess(data.movie),
     })
@@ -99,15 +99,15 @@ export default function UploadModal({ onClose, onSuccess }) {
 
         <div id="ep-mode-tabs">
           <button
-            className={`ep-mode-btn${mode === 'url'    ? ' active' : ''}`}
-            onClick={() => { setMode('url');    setErrorMsg('') }}
-            disabled={busy}
-          >mega link / id</button>
-          <button
             className={`ep-mode-btn${mode === 'upload' ? ' active' : ''}`}
             onClick={() => { setMode('upload'); setErrorMsg('') }}
             disabled={busy}
           >upload file</button>
+          <button
+            className={`ep-mode-btn${mode === 'url'    ? ' active' : ''}`}
+            onClick={() => { setMode('url');    setErrorMsg('') }}
+            disabled={busy}
+          >mega link / id</button>
         </div>
 
         <form id="upload-form" onSubmit={mode === 'url' ? handleSubmitUrl : handleSubmitFile}>

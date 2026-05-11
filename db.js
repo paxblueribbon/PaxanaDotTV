@@ -84,6 +84,10 @@ db.exec(`
 
 // ── Schema migrations ─────────────────────────────────────────────────────────
 try { db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT'); } catch (_) {}
+try { db.exec("ALTER TABLE movies ADD COLUMN video_source_type TEXT NOT NULL DEFAULT 'mega'"); } catch (_) {}
+try { db.exec("ALTER TABLE movies ADD COLUMN local_path TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+try { db.exec("ALTER TABLE episodes ADD COLUMN video_source_type TEXT NOT NULL DEFAULT 'mega'"); } catch (_) {}
+try { db.exec("ALTER TABLE episodes ADD COLUMN local_path TEXT NOT NULL DEFAULT ''"); } catch (_) {}
 db.exec(`
   CREATE TABLE IF NOT EXISTS tags (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,12 +175,16 @@ function getAllMovies() {
   return movies.map(m => ({ ...m, tags: tagMap[m.id] || [] }));
 }
 
-function addMovie({ title, director, release_year, genre, poster_url, embed_url }) {
+function addMovie({ title, director, release_year, genre, poster_url, embed_url, video_source_type = 'mega', local_path = '' }) {
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO movies (title, director, release_year, genre, poster_url, embed_url)
-    VALUES (@title, @director, @release_year, @genre, @poster_url, @embed_url)
-  `).run({ title, director, release_year, genre, poster_url, embed_url });
+    INSERT INTO movies (title, director, release_year, genre, poster_url, embed_url, video_source_type, local_path)
+    VALUES (@title, @director, @release_year, @genre, @poster_url, @embed_url, @video_source_type, @local_path)
+  `).run({ title, director, release_year, genre, poster_url, embed_url, video_source_type, local_path });
   return db.prepare('SELECT * FROM movies WHERE id = ?').get(lastInsertRowid);
+}
+
+function getMovieById(id) {
+  return db.prepare('SELECT * FROM movies WHERE id = ?').get(id);
 }
 
 function getAllShows() {
@@ -198,8 +206,8 @@ function getAllShows() {
         season:   s,
         episodes: eps
           .filter(e => e.season === s)
-          .map(({ id, episode_number, episode_title, embed_url }) =>
-            ({ id, episode_number, episode_title, embed_url })
+          .map(({ id, episode_number, episode_title, embed_url, video_source_type, local_path }) =>
+            ({ id, episode_number, episode_title, embed_url, video_source_type, local_path })
           ),
       })),
     };
@@ -266,8 +274,17 @@ function getEpisodeInfo(id) {
   ).get(id);
 }
 
+function getEpisodeById(id) {
+  return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
+}
+
 function updateEpisodeUrl(id, embedUrl) {
-  db.prepare('UPDATE episodes SET embed_url = ? WHERE id = ?').run(embedUrl, id);
+  db.prepare("UPDATE episodes SET embed_url = ?, video_source_type = 'mega', local_path = '' WHERE id = ?").run(embedUrl, id);
+  return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
+}
+
+function updateEpisodeDirect(id, localPath) {
+  db.prepare("UPDATE episodes SET embed_url = '', video_source_type = 'direct', local_path = ? WHERE id = ?").run(localPath, id);
   return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
 }
 
@@ -285,7 +302,7 @@ function deleteShow(id) {
 }
 
 function clearEpisodeUrl(id) {
-  db.prepare("UPDATE episodes SET embed_url = '' WHERE id = ?").run(id);
+  db.prepare("UPDATE episodes SET embed_url = '', video_source_type = 'mega', local_path = '' WHERE id = ?").run(id);
   return db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
 }
 
@@ -439,7 +456,8 @@ function setTagsForMedia(type, id, tagNames) {
 }
 
 module.exports = {
-  getAllMovies, addMovie, updateMovieUrl, deleteMovie, getAllShows, deleteShow, getEpisodeInfo, updateEpisodeUrl, clearEpisodeUrl, addShowWithEpisodes, importFromJson,
+  getAllMovies, addMovie, getMovieById, updateMovieUrl, deleteMovie,
+  getAllShows, deleteShow, getEpisodeInfo, getEpisodeById, updateEpisodeUrl, updateEpisodeDirect, clearEpisodeUrl, addShowWithEpisodes, importFromJson,
   getUserCount, createUser, getUserByUsername, getUserById, getAllUsers, deleteUser, updateLastLogin,
   createSession, getSession, deleteSession, deleteExpiredSessions,
   createInvite, getInvite, markInviteUsed,

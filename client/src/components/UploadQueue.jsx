@@ -18,14 +18,14 @@ export default function UploadQueue() {
           {u.status === 'uploading' && (
             <div className="uq-bar-wrap">
               <div
-                className={`uq-bar${u.progress === 'mega' ? ' indeterminate' : ''}`}
-                style={u.progress !== 'mega' ? { width: `${u.progress}%` } : {}}
+                className={`uq-bar${u.progress === 'processing' ? ' indeterminate' : ''}`}
+                style={u.progress !== 'processing' ? { width: `${u.progress}%` } : {}}
               />
             </div>
           )}
 
           <span className="uq-detail">
-            {u.status === 'uploading' && (u.progress === 'mega' ? 'uploading to MEGA…' : `${u.progress}%`)}
+            {u.status === 'uploading' && (u.progress === 'processing' ? 'processing…' : `${u.progress}%`)}
             {u.status === 'done'  && 'done ✓'}
             {u.status === 'error' && `failed: ${u.error}`}
           </span>

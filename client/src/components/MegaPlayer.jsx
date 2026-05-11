@@ -6,18 +6,27 @@ function buildEmbedUrl(raw) {
   return `https://mega.nz/embed/${match ? match[1] : s}`
 }
 
-export default function MegaPlayer({ title, subtitle, embedUrl, onBack, tags, onTagClick }) {
+export default function MegaPlayer({ title, subtitle, embedUrl, videoUrl, onBack, tags, onTagClick }) {
   return (
     <div id="mega-player-view">
       <button id="back-btn" onClick={onBack}>← back</button>
       <div id="mega-stage">
-        <iframe
-          src={buildEmbedUrl(embedUrl)}
-          title={title}
-          allowFullScreen
-          allow="autoplay; fullscreen"
-          frameBorder="0"
-        />
+        {videoUrl ? (
+          <video
+            src={videoUrl}
+            controls
+            autoPlay
+            title={title}
+          />
+        ) : (
+          <iframe
+            src={buildEmbedUrl(embedUrl)}
+            title={title}
+            allowFullScreen
+            allow="autoplay; fullscreen"
+            frameBorder="0"
+          />
+        )}
       </div>
       <div id="mega-meta">
         <span id="mega-title">{title}</span>

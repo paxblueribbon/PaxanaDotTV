@@ -5,16 +5,20 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
   const [seasonIdx, setSeasonIdx] = useState(0)
   const [editEp, setEditEp]       = useState(null) // { id, episode_number, episode_title, season }
 
+  function epHasVideo(ep) {
+    return ep.video_source_type === 'direct' || ep.embed_url.trim() !== ''
+  }
+
   // Non-admins only see seasons that contain at least one linked episode
   const visibleSeasons = isAdmin
     ? show.seasons
-    : show.seasons.filter(s => s.episodes.some(ep => ep.embed_url.trim() !== ''))
+    : show.seasons.filter(s => s.episodes.some(epHasVideo))
 
   const season = visibleSeasons[seasonIdx] ?? visibleSeasons[0]
 
-  function handleSuccess(episodeId, embedUrl) {
+  function handleSuccess(episodeId, episode) {
     setEditEp(null)
-    onEpisodeUpdated(episodeId, embedUrl)
+    onEpisodeUpdated(episodeId, episode)
   }
 
   async function handleDeleteShow() {
@@ -25,9 +29,9 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
 
   async function handleClearEpisode(e, epId) {
     e.stopPropagation()
-    if (!confirm('Clear the MEGA link for this episode?')) return
+    if (!confirm('Clear the video for this episode?')) return
     const res = await fetch(`/api/admin/episodes/${epId}`, { method: 'DELETE' })
-    if (res.ok) onEpisodeUpdated(epId, '')
+    if (res.ok) onEpisodeUpdated(epId, { embed_url: '', video_source_type: 'mega', local_path: '' })
   }
 
   if (!season) {
@@ -98,9 +102,9 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
 
       <div id="episode-list">
         {season.episodes
-          .filter(ep => isAdmin || ep.embed_url.trim() !== '')
+          .filter(ep => isAdmin || epHasVideo(ep))
           .map(ep => {
-            const available = ep.embed_url.trim() !== ''
+            const available = epHasVideo(ep)
             return (
               <div
                 key={ep.episode_number}
