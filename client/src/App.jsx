@@ -33,6 +33,7 @@ export default function App() {
   }, [])
 
   const isAdmin  = user?.role === 'admin'
+  const megaEnabled = Boolean(user?.mega_enabled)
   const inDetail = activeKey || activeMovie || activeShow || activeEpisode
 
   function handleTagClick(tag, targetSection) {
@@ -132,6 +133,7 @@ export default function App() {
         onEpisodeUpdated={handleEpisodeUpdated}
         onEpisodeDeleted={handleEpisodeDeleted}
         isAdmin={isAdmin}
+        megaEnabled={megaEnabled}
         onTagClick={tag => handleTagClick(tag, 'tv')}
       />
     )
@@ -212,6 +214,7 @@ export default function App() {
         <UploadModal
           onClose={() => setShowUpload(false)}
           onSuccess={handleUploadSuccess}
+          megaEnabled={megaEnabled}
         />
       )}
 

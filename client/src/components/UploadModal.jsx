@@ -9,10 +9,11 @@ const FIELDS = [
   { name: 'poster_url', label: 'poster url',  type: 'url',    required: false },
 ]
 
-export default function UploadModal({ onClose, onSuccess }) {
+export default function UploadModal({ onClose, onSuccess, megaEnabled = false }) {
   const { startUpload } = useUploads()
 
   const [mode, setMode]         = useState('upload') // 'upload' | 'url' ('upload' = direct, 'url' = mega link)
+  const [dest, setDest]         = useState('server') // 'server' | 'mega' — where the file goes
   const [fields, setFields]     = useState({ title: '', director: '', year: '', genre: '', poster_url: '' })
   const [file, setFile]         = useState(null)
   const [megaUrl, setMegaUrl]   = useState('')
@@ -81,8 +82,10 @@ export default function UploadModal({ onClose, onSuccess }) {
     Object.entries(fields).forEach(([k, v]) => body.append(k, v))
 
     startUpload({
-      label:     fields.title || file.name,
-      url:       '/api/movies/direct',
+      label:     dest === 'mega'
+        ? `${fields.title || file.name} → mega`
+        : (fields.title || file.name),
+      url:       dest === 'mega' ? '/api/movies' : '/api/movies/direct',
       body,
       onSuccess: data => onSuccess(data.movie),
     })
@@ -109,6 +112,30 @@ export default function UploadModal({ onClose, onSuccess }) {
             disabled={busy}
           >mega link / id</button>
         </div>
+
+        {mode === 'upload' && (
+          <>
+            <div id="dest-row">
+              <span id="dest-label">upload to</span>
+              <button
+                type="button"
+                className={`dest-btn${dest === 'server' ? ' active' : ''}`}
+                onClick={() => setDest('server')}
+                disabled={busy}
+              >this server</button>
+              <button
+                type="button"
+                className={`dest-btn${dest === 'mega' ? ' active' : ''}`}
+                onClick={() => setDest('mega')}
+                disabled={busy || !megaEnabled}
+                title={megaEnabled ? '' : 'MEGA credentials are not configured on the server'}
+              >mega</button>
+            </div>
+            {!megaEnabled && (
+              <p id="dest-note">MEGA unavailable — set MEGA_EMAIL and MEGA_PASSWORD on the server.</p>
+            )}
+          </>
+        )}
 
         <form id="upload-form" onSubmit={mode === 'url' ? handleSubmitUrl : handleSubmitFile}>
           {mode === 'url' && (

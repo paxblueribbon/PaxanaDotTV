@@ -501,7 +501,13 @@ app.post('/register/:token', async (req, res) => {
 
 // ── Current user ─────────────────────────────────────────────────────────────
 app.get('/api/me', (req, res) => {
-  res.json({ id: req.user.user_id, username: req.user.username, role: req.user.role });
+  res.json({
+    id:       req.user.user_id,
+    username: req.user.username,
+    role:     req.user.role,
+    // So the upload UI can avoid offering a destination that would 503.
+    mega_enabled: Boolean(process.env.MEGA_EMAIL && process.env.MEGA_PASSWORD),
+  });
 });
 
 // ── Admin API ─────────────────────────────────────────────────────────────────

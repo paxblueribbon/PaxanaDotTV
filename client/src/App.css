@@ -512,15 +512,19 @@ header .tv-suffix { color: #7c5fa0; }
   border: 1px solid #222;
 }
 
-video {
+/* Scoped to the live channel player only. It draws its own #video-controls
+   overlay, so the native controls are suppressed here — but these rules used to
+   be unscoped, which also stripped the controls from the directly-uploaded
+   video in MegaPlayer and made it unclickable via pointer-events: none. */
+#stage video {
   width: 100%;
   height: 100%;
   display: block;
   pointer-events: none;
 }
 
-video::-webkit-media-controls { display: none !important; }
-video::-webkit-media-controls-enclosure { display: none !important; }
+#stage video::-webkit-media-controls { display: none !important; }
+#stage video::-webkit-media-controls-enclosure { display: none !important; }
 
 /* ── Custom video controls ── */
 #video-controls {
@@ -819,6 +823,17 @@ footer {
   height: 100%;
   display: block;
   border: none;
+}
+
+/* Directly-uploaded video plays in a <video> rather than the MEGA iframe.
+   Without these it renders at its intrinsic size and overflows the stage,
+   putting the control bar outside the visible area. */
+#mega-stage video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+  object-fit: contain;
 }
 
 #mega-meta {
@@ -1276,6 +1291,42 @@ footer {
 .ep-mode-btn:hover:not(:disabled) { color: #c4b5fd; background: #0e0520; }
 .ep-mode-btn.active { color: #c4b5fd; background: #130a26; }
 .ep-mode-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Where an uploaded file is sent: this server, or MEGA. */
+#dest-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem 0;
+}
+
+#dest-label {
+  color: #444;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+}
+
+.dest-btn {
+  background: none;
+  border: 1px solid #1e1e1e;
+  color: #444;
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.dest-btn:hover:not(:disabled) { color: #c4b5fd; border-color: #2a1a4a; }
+.dest-btn.active { color: #c4b5fd; border-color: #3b2a6b; background: #130a26; }
+.dest-btn:disabled { opacity: 0.35; cursor: default; }
+
+#dest-note {
+  color: #444;
+  font-size: 0.6rem;
+  padding: 0.3rem 0.75rem 0;
+}
 
 /* ── Suggest button ── */
 #suggest-btn {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import EpisodeUploadModal from './EpisodeUploadModal'
 
-export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, onEpisodeDeleted, isAdmin, onTagClick }) {
+export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, onEpisodeDeleted, isAdmin, megaEnabled, onTagClick }) {
   const [seasonIdx, setSeasonIdx] = useState(0)
   const [editEp, setEditEp]       = useState(null) // { id, episode_number, episode_title, season }
 
@@ -149,6 +149,7 @@ export default function ShowDetail({ show, onSelect, onBack, onEpisodeUpdated, o
           episode={editEp}
           onClose={() => setEditEp(null)}
           onSuccess={handleSuccess}
+          megaEnabled={megaEnabled}
         />
       )}
     </div>

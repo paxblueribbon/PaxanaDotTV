@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react'
 import { useUploads } from '../UploadContext'
 
-export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
+export default function EpisodeUploadModal({ episode, onClose, onSuccess, megaEnabled = false }) {
   const { startUpload } = useUploads()
 
   const [mode, setMode]         = useState('upload') // 'upload' | 'url'
+  const [dest, setDest]         = useState('server') // 'server' | 'mega' — where the file goes
   const [megaUrl, setMegaUrl]   = useState('')
   const [file, setFile]         = useState(null)
   const [status, setStatus]     = useState('idle')  // idle | saving | error
@@ -42,8 +43,10 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
     body.append('file', file)
 
     startUpload({
-      label:     epLabel,
-      url:       `/api/episodes/${episode.id}/upload/direct`,
+      label:     dest === 'mega' ? `${epLabel} → mega` : epLabel,
+      url:       dest === 'mega'
+        ? `/api/episodes/${episode.id}/upload`
+        : `/api/episodes/${episode.id}/upload/direct`,
       body,
       onSuccess: data => onSuccess(episode.id, data.episode),
     })
@@ -62,6 +65,30 @@ export default function EpisodeUploadModal({ episode, onClose, onSuccess }) {
           <button className={`ep-mode-btn${mode === 'upload' ? ' active' : ''}`} onClick={() => { setMode('upload'); setErrorMsg('') }} disabled={busy}>upload file</button>
           <button className={`ep-mode-btn${mode === 'url'    ? ' active' : ''}`} onClick={() => { setMode('url');    setErrorMsg('') }} disabled={busy}>mega link / id</button>
         </div>
+
+        {mode === 'upload' && (
+          <>
+            <div id="dest-row">
+              <span id="dest-label">upload to</span>
+              <button
+                type="button"
+                className={`dest-btn${dest === 'server' ? ' active' : ''}`}
+                onClick={() => setDest('server')}
+                disabled={busy}
+              >this server</button>
+              <button
+                type="button"
+                className={`dest-btn${dest === 'mega' ? ' active' : ''}`}
+                onClick={() => setDest('mega')}
+                disabled={busy || !megaEnabled}
+                title={megaEnabled ? '' : 'MEGA credentials are not configured on the server'}
+              >mega</button>
+            </div>
+            {!megaEnabled && (
+              <p id="dest-note">MEGA unavailable — set MEGA_EMAIL and MEGA_PASSWORD on the server.</p>
+            )}
+          </>
+        )}
 
         <form id="upload-form" onSubmit={mode === 'url' ? handleSetUrl : handleUpload}>
           {mode === 'url' ? (
