@@ -2,6 +2,17 @@ require('dotenv').config();
 // megajs uses the Web Crypto API (globalThis.crypto.getRandomValues).
 // Polyfill for Node versions that don't expose it as a global.
 if (!globalThis.crypto) globalThis.crypto = require('crypto').webcrypto;
+// ── Last-resort process guards ───────────────────────────────────────────────
+// One unhandled stream error or rejected promise is enough to kill the process,
+// and with it every live channel — viewers then see an nginx 502 until someone
+// restarts the service by hand. Log it loudly and stay on the air instead.
+process.on('uncaughtException', err => {
+  console.error('[fatal] Uncaught exception:', (err && err.stack) || err);
+});
+process.on('unhandledRejection', reason => {
+  console.error('[fatal] Unhandled rejection:', (reason && reason.stack) || reason);
+});
+
 const NodeMediaServer = require('node-media-server');
 const express = require('express');
 const path = require('path');
@@ -810,6 +821,74 @@ app.post('/api/movies/direct', requireAdmin, upload.single('file'), async (req, 
   }
 });
 
+// Streams a local video file with HTTP Range support.
+//
+// Stream errors and client disconnects are handled here on purpose: an
+// unhandled 'error' event on the file stream or the response takes the whole
+// process down (and every viewer gets an nginx 502 until it is restarted).
+// Browsers abort these requests constantly while seeking, so this path has to
+// tolerate a half-written response.
+function sendVideoFile(req, res, filePath) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (err) {
+    console.warn(`[video] stat failed for ${filePath}: ${err.message}`);
+    return res.status(404).json({ error: 'Video file missing on server' });
+  }
+
+  const fileSize = stat.size;
+  if (!fileSize) return res.status(404).json({ error: 'Video file is empty' });
+
+  const range = req.headers.range;
+  let start  = 0;
+  let end    = fileSize - 1;
+  let status = 200;
+
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    const unsatisfiable = () => {
+      res.setHeader('Content-Range', `bytes */${fileSize}`);
+      return res.status(416).end();
+    };
+    if (!m || (!m[1] && !m[2])) return unsatisfiable();
+
+    if (m[1]) {
+      start = parseInt(m[1], 10);
+      if (m[2]) end = parseInt(m[2], 10);
+    } else {
+      // Suffix range — "bytes=-500" means the last 500 bytes of the file.
+      start = Math.max(0, fileSize - parseInt(m[2], 10));
+    }
+    if (end > fileSize - 1) end = fileSize - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= fileSize) {
+      return unsatisfiable();
+    }
+    status = 206;
+  }
+
+  const headers = {
+    'Accept-Ranges':  'bytes',
+    'Content-Length': end - start + 1,
+    'Content-Type':   'video/mp4',
+  };
+  if (status === 206) headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+  res.writeHead(status, headers);
+
+  const stream = fs.createReadStream(filePath, { start, end });
+  stream.on('error', err => {
+    console.error(`[video] Read error on ${filePath}: ${err.message}`);
+    res.destroy();
+  });
+  res.on('error', err => {
+    console.error(`[video] Response error for ${filePath}: ${err.message}`);
+    stream.destroy();
+  });
+  // Fires on a clean finish too; destroying a finished stream is a no-op.
+  res.on('close', () => stream.destroy());
+  stream.pipe(res);
+}
+
 // ── Stream directly-uploaded movie ───────────────────────────────────────────
 // GET /api/video/movie/:id
 app.get('/api/video/movie/:id', requireAuth, (req, res) => {
@@ -817,34 +896,7 @@ app.get('/api/video/movie/:id', requireAuth, (req, res) => {
   if (!movie || movie.video_source_type !== 'direct' || !movie.local_path) {
     return res.status(404).json({ error: 'Not found' });
   }
-  if (!fs.existsSync(movie.local_path)) {
-    return res.status(404).json({ error: 'Video file missing on server' });
-  }
-
-  const stat     = fs.statSync(movie.local_path);
-  const fileSize = stat.size;
-  const range    = req.headers.range;
-
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-    const start     = parseInt(startStr, 10);
-    const end       = endStr ? parseInt(endStr, 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
-    res.writeHead(206, {
-      'Content-Range':  `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges':  'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type':   'video/mp4',
-    });
-    fs.createReadStream(movie.local_path, { start, end }).pipe(res);
-  } else {
-    res.writeHead(200, {
-      'Content-Length': fileSize,
-      'Accept-Ranges':  'bytes',
-      'Content-Type':   'video/mp4',
-    });
-    fs.createReadStream(movie.local_path).pipe(res);
-  }
+  sendVideoFile(req, res, movie.local_path);
 });
 
 // ── TMDB movie lookup ─────────────────────────────────────────────────────────
@@ -1039,34 +1091,7 @@ app.get('/api/video/episode/:id', requireAuth, (req, res) => {
   if (!episode || episode.video_source_type !== 'direct' || !episode.local_path) {
     return res.status(404).json({ error: 'Not found' });
   }
-  if (!fs.existsSync(episode.local_path)) {
-    return res.status(404).json({ error: 'Video file missing on server' });
-  }
-
-  const stat     = fs.statSync(episode.local_path);
-  const fileSize = stat.size;
-  const range    = req.headers.range;
-
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
-    const start     = parseInt(startStr, 10);
-    const end       = endStr ? parseInt(endStr, 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
-    res.writeHead(206, {
-      'Content-Range':  `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges':  'bytes',
-      'Content-Length': chunkSize,
-      'Content-Type':   'video/mp4',
-    });
-    fs.createReadStream(episode.local_path, { start, end }).pipe(res);
-  } else {
-    res.writeHead(200, {
-      'Content-Length': fileSize,
-      'Accept-Ranges':  'bytes',
-      'Content-Type':   'video/mp4',
-    });
-    fs.createReadStream(episode.local_path).pipe(res);
-  }
+  sendVideoFile(req, res, episode.local_path);
 });
 
 // ── Show channel management ────────────────────────────────────────────────────
