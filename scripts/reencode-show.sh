@@ -27,6 +27,7 @@ CRF=${CRF:-20}
 PRESET=${PRESET:-slow}
 DEC_THREADS=${DEC_THREADS:-2}
 ENC_THREADS=${ENC_THREADS:-3}
+PROGRESS_EVERY=${PROGRESS_EVERY:-30}   # seconds of encoded content between progress lines
 
 mkdir -p "$OUT_DIR"
 LOG="$OUT_DIR/reencode.log"
@@ -68,7 +69,12 @@ for f in "${files[@]}"; do
     continue
   fi
 
-  say "[$i/$total] encoding: $base"
+  src_d=$(duration "$f")
+  if [ -n "$src_d" ]; then
+    say "[$i/$total] encoding: $base ($(awk -v d="$src_d" 'BEGIN{printf "%d:%02d", d/60, d%60}'))"
+  else
+    say "[$i/$total] encoding: $base"
+  fi
   start=$(date +%s)
   # nice: the live channels must win the CPU; this job can take as long as it takes.
   # -threads before -i bounds the decoder, -x264opts threads= bounds the encoder,
@@ -81,7 +87,18 @@ for f in "${files[@]}"; do
       -c:v libx264 -crf "$CRF" -preset "$PRESET" -x264opts "threads=$ENC_THREADS" \
       -vf "scale=-2:'min(720,ih)'" -pix_fmt yuv420p \
       -c:a aac -b:a 160k -ac 2 -movflags +faststart \
-      -f mp4 "$out.part" 2>>"$LOG"; then
+      -progress pipe:1 -nostats -f mp4 "$out.part" 2>>"$LOG" \
+      | awk -v dur="${src_d:-0}" -v every="$PROGRESS_EVERY" 'BEGIN { nxt = every }
+          /^out_time_us=/ {
+            split($0, a, "="); if (a[2] == "N/A") next;
+            t = a[2] / 1000000;
+            if (t >= nxt) {
+              nxt = t + every;
+              if (dur > 0) printf("       %d%% — %d:%02d of %d:%02d\n", t*100/dur, t/60, t%60, dur/60, dur%60);
+              else         printf("       %d:%02d encoded\n", t/60, t%60);
+              fflush();
+            }
+          }'; then
     mv -f "$out.part" "$out"
   else
     say "    FAILED: $base (see $LOG)"
@@ -92,7 +109,7 @@ for f in "${files[@]}"; do
 
   # Sanity check: a truncated encode is worse than none, because it looks fine
   # in a listing and then cuts off mid-episode on air.
-  src_d=$(duration "$f"); out_d=$(duration "$out")
+  out_d=$(duration "$out")
   if [ -n "$src_d" ] && [ -n "$out_d" ]; then
     if ! awk -v a="$src_d" -v b="$out_d" 'BEGIN { exit !(b > 0 && (a-b < 2 && b-a < 2)) }'; then
       say "    WARNING: duration mismatch, source ${src_d}s vs output ${out_d}s — check this one"
