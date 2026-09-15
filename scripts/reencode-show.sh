@@ -33,6 +33,18 @@ mkdir -p "$OUT_DIR"
 LOG="$OUT_DIR/reencode.log"
 say() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG"; }
 
+# Without this, Ctrl-C kills only the running ffmpeg. The script is not under
+# set -e, so the loop treats that as a failed file and starts the next one —
+# which looks exactly like Ctrl-C doing nothing.
+interrupted() {
+  trap - INT TERM
+  printf '\n'
+  say "interrupted — stopping. Completed files are kept; re-run to resume."
+  rm -f "$OUT_DIR"/*.part
+  exit 130
+}
+trap interrupted INT TERM
+
 # NUL-delimited so spaces and apostrophes in filenames survive.
 files=()
 while IFS= read -r -d '' f; do files+=("$f"); done < <(
