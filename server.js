@@ -1116,6 +1116,47 @@ app.get('/api/show-channels', (req, res) => {
 // Keys that were intentionally stopped — don't auto-restart these.
 const stoppedChannels = new Set();
 
+// ── ffmpeg stderr noise control ───────────────────────────────────────────────
+// A looping concat source complains about timestamps on essentially every
+// packet. Forwarding all of it unfiltered produced a 247 GiB pm2 log that
+// filled the disk and took the whole site down, so per-channel stderr is
+// filtered for known noise and then rate-limited, with a periodic summary of
+// whatever was dropped.
+const FFMPEG_NOISE = [
+  /Opening '.*' for (writing|reading)/,
+  /\b(DTS|PTS) \d+, next:\d+.*invalid dropping/,
+  /Non-monotonic(al)? DTS/,
+  /past duration .* too large/,
+];
+const STDERR_WINDOW_MS   = 60_000;
+const STDERR_MAX_PER_WIN = 20;
+const stderrBudgets = new Map(); // channel key → { count, suppressed, windowStart }
+
+function logFfmpegLine(key, line) {
+  if (FFMPEG_NOISE.some(re => re.test(line))) return;
+
+  const now = Date.now();
+  let budget = stderrBudgets.get(key);
+  if (!budget || now - budget.windowStart >= STDERR_WINDOW_MS) {
+    if (budget && budget.suppressed) {
+      const secs = Math.round((now - budget.windowStart) / 1000);
+      process.stderr.write(`[ffmpeg/${key}] … ${budget.suppressed} more line(s) suppressed over ${secs}s\n`);
+    }
+    budget = { count: 0, suppressed: 0, windowStart: now };
+    stderrBudgets.set(key, budget);
+  }
+
+  if (budget.count < STDERR_MAX_PER_WIN) {
+    budget.count++;
+    process.stderr.write(`[ffmpeg/${key}] ${line}\n`);
+  } else {
+    budget.suppressed++;
+  }
+}
+
+// Consecutive-failure counts per channel, for restart backoff.
+const restartState = new Map();
+
 function launchFfmpeg(key, name, concatPath) {
   if (stoppedChannels.has(key)) return; // stop was requested, don't restart
   const binary = process.env.FFMPEG_PATH || ffmpegPath;
@@ -1127,6 +1168,7 @@ function launchFfmpeg(key, name, concatPath) {
   fs.mkdirSync(hlsDir, { recursive: true });
 
   const proc = spawn(binary, [
+    '-hide_banner',
     '-re',
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
@@ -1144,20 +1186,28 @@ function launchFfmpeg(key, name, concatPath) {
     '-hls_segment_filename', path.join(hlsDir, '%05d.ts'),
     path.join(hlsDir, 'index.m3u8'),
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const startedAt = Date.now();
+  // Healthy channels write a segment every ~4s around the clock, so only the
+  // first segment, stalls, and an occasional heartbeat are worth a log line.
   let lastSegTime = null;
+  let lastSegName = null;
+  let segCount    = 0;
   const segWatcher = fs.watch(hlsDir, (event, filename) => {
     if (!filename || !filename.endsWith('.ts')) return;
-    if (!fs.existsSync(path.join(hlsDir, filename))) return; // deletion, skip
+    if (filename === lastSegName) return;                     // fs.watch fires twice per file
+    if (!fs.existsSync(path.join(hlsDir, filename))) return;  // deletion, skip
+    lastSegName = filename;
     const now = Date.now();
-    if (lastSegTime !== null) {
-      const gap = ((now - lastSegTime) / 1000).toFixed(1);
-      if (parseFloat(gap) > 6) {
-        console.warn(`[hls/${key}] ⚠  segment gap ${gap}s (expected ~4s) — ${filename}`);
-      } else {
-        console.log(`[hls/${key}] segment +${gap}s — ${filename}`);
-      }
-    } else {
+    segCount++;
+    if (lastSegTime === null) {
       console.log(`[hls/${key}] first segment written — ${filename}`);
+    } else {
+      const gap = (now - lastSegTime) / 1000;
+      if (gap > 6) {
+        console.warn(`[hls/${key}] ⚠  segment gap ${gap.toFixed(1)}s (expected ~4s) — ${filename}`);
+      } else if (segCount % 900 === 0) {                      // ~hourly at 4s/segment
+        console.log(`[hls/${key}] healthy — ${segCount} segments, last +${gap.toFixed(1)}s`);
+      }
     }
     lastSegTime = now;
   });
@@ -1180,12 +1230,12 @@ function launchFfmpeg(key, name, concatPath) {
           console.warn(`[ffmpeg/${key}] ⚠  encoder behind real-time: speed=${speed.toFixed(2)}x fps=${fps}`);
         }
       } else {
-        process.stderr.write(`[ffmpeg/${key}] ${line}\n`);
+        logFfmpegLine(key, line);
       }
     }
   });
   proc.stderr.on('end', () => {
-    if (stderrBuf.trim()) process.stderr.write(`[ffmpeg/${key}] ${stderrBuf.trim()}\n`);
+    if (stderrBuf.trim()) logFfmpegLine(key, stderrBuf.trim());
     segWatcher.close();
   });
 
@@ -1196,10 +1246,20 @@ function launchFfmpeg(key, name, concatPath) {
   proc.on('exit', (code, signal) => {
     console.log(`[ffmpeg] "${name}" exited (code=${code} signal=${signal})`);
     ffmpegProcesses.delete(key);
-    if (!stoppedChannels.has(key)) {
-      console.log(`[ffmpeg] Auto-restarting "${name}" in 2s…`);
-      setTimeout(() => launchFfmpeg(key, name, concatPath), 2000);
-    }
+    if (stoppedChannels.has(key)) return;
+
+    // Back off on a channel that keeps dying instead of respawning every 2s
+    // forever — a tight respawn loop is what turns a broken file into gigabytes
+    // of log. A process that stayed up a full minute counts as healthy.
+    const state  = restartState.get(key) || { failures: 0 };
+    const ranFor = Date.now() - startedAt;
+    state.failures = ranFor > 60_000 ? 0 : state.failures + 1;
+    restartState.set(key, state);
+
+    const delay = Math.min(2000 * 2 ** Math.min(state.failures, 8), 300_000);
+    const note  = state.failures ? ` (consecutive failures: ${state.failures})` : '';
+    console.log(`[ffmpeg] Auto-restarting "${name}" in ${Math.round(delay / 1000)}s${note}…`);
+    setTimeout(() => launchFfmpeg(key, name, concatPath), delay);
   });
 
   ffmpegProcesses.set(key, proc);
