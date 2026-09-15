@@ -1179,9 +1179,13 @@ function launchFfmpeg(key, name, concatPath) {
     // (~40s behind live) does not benefit from.
     '-c:v', 'libx264', '-b:v', '2000k', '-maxrate', '2200k', '-bufsize', '4000k',
     '-preset', 'ultrafast',
-    '-x264opts', 'threads=2:keyint=120:min-keyint=120:scenecut=0',
+    // keyint must stay fps * hls_time so every segment starts on a keyframe.
+    '-x264opts', 'threads=2:keyint=96:min-keyint=96:scenecut=0',
     '-pix_fmt', 'yuv420p',
-    '-vf', 'fps=30',
+    // Cap at 720p without ever upscaling — only the 1080p source exceeds it —
+    // and output 24fps, since every source is 23.976 or lower. The quotes are
+    // ffmpeg's own filter escaping, protecting the comma inside min().
+    '-vf', "scale=-2:'min(720,ih)',fps=24",
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-f', 'hls',
     '-hls_time', '4',
