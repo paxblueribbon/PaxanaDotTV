@@ -1173,6 +1173,10 @@ function launchFfmpeg(key, name, concatPath) {
     '-stream_loop', '-1',
     '-f', 'concat', '-safe', '0',
     '-thread_queue_size', '1024',
+    // Before -i, so this bounds the DECODER. Without it the decoder uses one
+    // thread per core, letting a single 1080p HEVC channel starve the others;
+    // the threads= in -x264opts only ever bounded the encoder.
+    '-threads', '2',
     '-i', concatPath,
     // No -tune zerolatency: it forces sliced threading, which is slower than
     // frame-based threading, to buy latency that a 4s-segment HLS playlist
@@ -1211,7 +1215,7 @@ function launchFfmpeg(key, name, concatPath) {
       console.log(`[hls/${key}] first segment written — ${filename}`);
     } else {
       const gap = (now - lastSegTime) / 1000;
-      if (gap > 6) {
+      if (gap > 6 && segCount > 2) {
         console.warn(`[hls/${key}] ⚠  segment gap ${gap.toFixed(1)}s (expected ~4s) — ${filename}`);
       } else if (segCount % 900 === 0) {                      // ~hourly at 4s/segment
         console.log(`[hls/${key}] healthy — ${segCount} segments, last +${gap.toFixed(1)}s`);
@@ -1341,6 +1345,7 @@ app.listen(HTTP_PORT, () => {
       const folders = getShowFolders();
       if (folders.length === 0) return;
       console.log(`[autoLaunch] Starting ${folders.length} show channel(s)…`);
+      let launched = 0;
       for (const name of folders) {
         const key = showNameToKey(name);
         if (ffmpegProcesses.has(key)) continue;
@@ -1355,7 +1360,13 @@ app.listen(HTTP_PORT, () => {
           continue;
         }
         const concatPath = buildConcatFile(showDir, videos);
-        launchFfmpeg(key, name, concatPath);
+        // Stagger the starts. Channel startup — input probe, decoder init,
+        // filling the first segment — is the heaviest moment of a channel's
+        // life, and firing every channel at once made them all contend for the
+        // box during exactly that window, which showed up as segment gaps on
+        // the most expensive channel.
+        setTimeout(() => launchFfmpeg(key, name, concatPath), launched * 4000);
+        launched++;
       }
     } catch (err) {
       console.error('[autoLaunch] Error:', err.message);
