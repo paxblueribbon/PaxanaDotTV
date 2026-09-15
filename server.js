@@ -1174,7 +1174,11 @@ function launchFfmpeg(key, name, concatPath) {
     '-f', 'concat', '-safe', '0',
     '-thread_queue_size', '1024',
     '-i', concatPath,
-    '-c:v', 'libx264', '-b:v', '2000k', '-preset', 'ultrafast', '-tune', 'zerolatency',
+    // No -tune zerolatency: it forces sliced threading, which is slower than
+    // frame-based threading, to buy latency that a 4s-segment HLS playlist
+    // (~40s behind live) does not benefit from.
+    '-c:v', 'libx264', '-b:v', '2000k', '-maxrate', '2200k', '-bufsize', '4000k',
+    '-preset', 'ultrafast',
     '-x264opts', 'threads=2:keyint=120:min-keyint=120:scenecut=0',
     '-pix_fmt', 'yuv420p',
     '-vf', 'fps=30',
