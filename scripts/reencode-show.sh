@@ -28,6 +28,13 @@ PRESET=${PRESET:-slow}
 DEC_THREADS=${DEC_THREADS:-2}
 ENC_THREADS=${ENC_THREADS:-3}
 PROGRESS_EVERY=${PROGRESS_EVERY:-30}   # seconds of encoded content between progress lines
+FPS=${FPS:-}                          # e.g. FPS=24 to force constant frame rate out
+
+VF="scale=-2:'min(720,ih)'"
+# A source with broken timestamps (an old MPEG-4 rip, say) produces a variable
+# frame rate file that the live pipeline then fights every single packet.
+# Forcing CFR here bakes the fix into the file instead.
+[ -n "$FPS" ] && VF="$VF,fps=$FPS"
 
 mkdir -p "$OUT_DIR"
 LOG="$OUT_DIR/reencode.log"
@@ -56,6 +63,7 @@ while IFS= read -r -d '' f; do files+=("$f"); done < <(
 total=${#files[@]}
 [ "$total" -eq 0 ] && { echo "no video files in $SHOW_DIR" >&2; exit 1; }
 say "=== $SHOW_NAME: $total file(s) -> $OUT_DIR ==="
+say "settings: crf=$CRF preset=$PRESET vf=$VF"
 
 # A killed run can leave a partial file behind; it is never resumable.
 find "$OUT_DIR" -maxdepth 1 -name '*.part' -delete 2>/dev/null
@@ -97,7 +105,7 @@ for f in "${files[@]}"; do
       -threads "$DEC_THREADS" -i "$f" \
       -map 0:v:0 -map '0:a:0?' -sn -dn \
       -c:v libx264 -crf "$CRF" -preset "$PRESET" -x264opts "threads=$ENC_THREADS" \
-      -vf "scale=-2:'min(720,ih)'" -pix_fmt yuv420p \
+      -vf "$VF" -pix_fmt yuv420p \
       -c:a aac -b:a 160k -ac 2 -movflags +faststart \
       -progress pipe:1 -nostats -f mp4 "$out.part" 2>>"$LOG" \
       | awk -v dur="${src_d:-0}" -v every="$PROGRESS_EVERY" 'BEGIN { nxt = every }
