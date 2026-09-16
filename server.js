@@ -1334,6 +1334,53 @@ app.post('/api/show-channels/:key/stop', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Encoder lifecycle across restarts ─────────────────────────────────────────
+// Nothing killed the spawned encoders when this process died, so every
+// `pm2 restart` orphaned a full set of them. They keep running, keep writing
+// segments, and keep rewriting index.m3u8 in the same directory the new
+// encoders use — two writers per channel, which reads to a viewer as a stutter
+// and shows up in the logs as impossible segment gaps.
+
+// Kill any ffmpeg still writing into our media root that we did not spawn.
+function killOrphanedEncoders() {
+  let pids;
+  try { pids = fs.readdirSync('/proc').filter(n => /^\d+$/.test(n)); }
+  catch { return 0; }  // not Linux — nothing to sweep
+  let killed = 0;
+  for (const pid of pids) {
+    if (Number(pid) === process.pid) continue;
+    let argv;
+    try {
+      argv = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean);
+    } catch { continue; }
+    if (!argv.length) continue;
+    // argv[0] must BE ffmpeg, not merely mention it: a shell command line that
+    // happens to contain both strings (a grep, or the re-encode script) must
+    // never match. And an argument must actually point into our media root.
+    const exe = argv[0].split('/').pop();
+    if (exe !== 'ffmpeg') continue;
+    if (!argv.slice(1).some(a => a.startsWith(MEDIA_ROOT))) continue;
+    try { process.kill(Number(pid), 'SIGKILL'); killed++; } catch (_) {}
+  }
+  if (killed) console.log(`[startup] Killed ${killed} orphaned encoder(s) left by a previous run`);
+  return killed;
+}
+
+// Take our encoders down with us, so a restart does not leave a second set.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} — stopping ${ffmpegProcesses.size} encoder(s)`);
+  for (const [key, proc] of ffmpegProcesses) {
+    stoppedChannels.add(key);            // suppress the auto-restart timer
+    try { proc.kill('SIGKILL'); } catch (_) {}
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
 app.listen(HTTP_PORT, () => {
   console.log(`
 ┌──────────────────────────────────────────────────────┐
@@ -1344,6 +1391,8 @@ app.listen(HTTP_PORT, () => {
 │  HLS output : /hls/live/<channel-key>/index.m3u8    │
 └──────────────────────────────────────────────────────┘
 `);
+
+  killOrphanedEncoders();
 
   // Auto-launch all show channels a few seconds after startup so NMS is ready
   setTimeout(() => {
