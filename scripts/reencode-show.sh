@@ -29,8 +29,23 @@ DEC_THREADS=${DEC_THREADS:-2}
 ENC_THREADS=${ENC_THREADS:-3}
 PROGRESS_EVERY=${PROGRESS_EVERY:-30}   # seconds of encoded content between progress lines
 FPS=${FPS:-}                          # e.g. FPS=24 to force constant frame rate out
+SIZE=${SIZE:-}                        # e.g. SIZE=640x360 to force one exact frame size
 
-VF="scale=-2:'min(720,ih)'"
+if [ -n "$SIZE" ]; then
+  # One exact frame size for every file. The concat demuxer cannot change frame
+  # size mid-stream — a show whose seasons were ripped at different resolutions
+  # kills the channel at the first boundary — so scale to fit and pad the rest,
+  # which keeps each source's aspect ratio inside a fixed canvas.
+  SIZE_W=${SIZE%%x*}; SIZE_H=${SIZE##*x}
+  case "$SIZE" in
+    *x*) : ;;
+    *) echo "SIZE must look like 640x360" >&2; exit 1 ;;
+  esac
+  VF="scale=w=$SIZE_W:h=$SIZE_H:force_original_aspect_ratio=decrease"
+  VF="$VF,pad=$SIZE_W:$SIZE_H:(ow-iw)/2:(oh-ih)/2,setsar=1"
+else
+  VF="scale=-2:'min(720,ih)'"
+fi
 # A source with broken timestamps (an old MPEG-4 rip, say) produces a variable
 # frame rate file that the live pipeline then fights every single packet.
 # Forcing CFR here bakes the fix into the file instead.

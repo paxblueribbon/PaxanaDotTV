@@ -1233,6 +1233,9 @@ function launchFfmpeg(key, name, concatPath) {
   // ffmpeg writes real-time progress stats with \r, not \n, so split on both.
   // Extract speed= to catch when the encoder falls behind real-time (speed < 1).
   let stderrBuf = '';
+  // Kept regardless of rate limiting: when a channel dies, the reason is in
+  // the last few lines, and without them the exit code alone says nothing.
+  const recentStderr = [];
   proc.stderr.on('data', chunk => {
     stderrBuf += chunk.toString('utf8');
     let sep;
@@ -1248,6 +1251,8 @@ function launchFfmpeg(key, name, concatPath) {
           console.warn(`[ffmpeg/${key}] ⚠  encoder behind real-time: speed=${speed.toFixed(2)}x fps=${fps}`);
         }
       } else {
+        recentStderr.push(line);
+        if (recentStderr.length > 8) recentStderr.shift();
         logFfmpegLine(key, line);
       }
     }
@@ -1263,6 +1268,10 @@ function launchFfmpeg(key, name, concatPath) {
   });
   proc.on('exit', (code, signal) => {
     console.log(`[ffmpeg] "${name}" exited (code=${code} signal=${signal})`);
+    if (code !== 0 && code !== null && recentStderr.length) {
+      console.error(`[ffmpeg/${key}] last output before exit:`);
+      for (const l of recentStderr) console.error(`[ffmpeg/${key}]   ${l}`);
+    }
     ffmpegProcesses.delete(key);
     if (stoppedChannels.has(key)) return;
 
