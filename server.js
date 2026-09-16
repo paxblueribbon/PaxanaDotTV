@@ -1205,6 +1205,12 @@ function launchFfmpeg(key, name, concatPath) {
     path.join(hlsDir, 'index.m3u8'),
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   const startedAt = Date.now();
+  // ffmpeg's own throughput figure. The segment watcher below is built on
+  // fs.watch, and inotify drops or coalesces events while delete_segments
+  // churns the directory — two healthy 4s segments then look like one 8s
+  // gap. A gap is only reported when the encoder agrees it is behind.
+  let lastSpeed  = null;
+  let statsCount = 0;
   // Healthy channels write a segment every ~4s around the clock, so only the
   // first segment, stalls, and an occasional heartbeat are worth a log line.
   let lastSegTime = null;
@@ -1221,8 +1227,8 @@ function launchFfmpeg(key, name, concatPath) {
       console.log(`[hls/${key}] first segment written — ${filename}`);
     } else {
       const gap = (now - lastSegTime) / 1000;
-      if (gap > 6 && segCount > 2) {
-        console.warn(`[hls/${key}] ⚠  segment gap ${gap.toFixed(1)}s (expected ~4s) — ${filename}`);
+      if (gap > 6 && segCount > 2 && lastSpeed !== null && lastSpeed < 0.95) {
+        console.warn(`[hls/${key}] ⚠  segment gap ${gap.toFixed(1)}s (expected ~4s, encoder at ${lastSpeed.toFixed(2)}x) — ${filename}`);
       } else if (segCount % 900 === 0) {                      // ~hourly at 4s/segment
         console.log(`[hls/${key}] healthy — ${segCount} segments, last +${gap.toFixed(1)}s`);
       }
@@ -1247,7 +1253,10 @@ function launchFfmpeg(key, name, concatPath) {
       if (speedMatch) {
         const speed = parseFloat(speedMatch[1]);
         const fps   = (line.match(/fps=\s*([\d.]+)/) || [])[1] ?? '?';
-        if (speed < 0.95) {
+        lastSpeed = speed;
+        // The first stats line is printed before any frame is encoded and
+        // always reads speed=0.00x fps=0.0; it is not a stall.
+        if (statsCount++ > 0 && speed < 0.95) {
           console.warn(`[ffmpeg/${key}] ⚠  encoder behind real-time: speed=${speed.toFixed(2)}x fps=${fps}`);
         }
       } else {
