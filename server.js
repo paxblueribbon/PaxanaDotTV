@@ -1169,6 +1169,20 @@ const restartState = new Map();
 // itself rather than the fs.watch events, which inotify can drop.
 const STALL_MS = 90_000;   // ~22 segments' worth at hls_time 4
 
+// Which episode a stuck encoder had open. Working this out by hand meant
+// catching the process alive and reading /proc before restarting it; capturing
+// it at kill time makes the next stall diagnosable from the log alone.
+function openInputFile(pid) {
+  try {
+    for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) {
+      let target;
+      try { target = fs.readlinkSync(`/proc/${pid}/fd/${fd}`); } catch { continue; }
+      if (target.startsWith(SHOWS_DIR) && !target.endsWith('concat.txt')) return target;
+    }
+  } catch (_) {}
+  return null;
+}
+
 function startStallWatchdog(key, name, hlsDir, startedAt, proc) {
   return setInterval(() => {
     let newest = 0;
@@ -1183,7 +1197,9 @@ function startStallWatchdog(key, name, hlsDir, startedAt, proc) {
     const idle = Date.now() - (newest || startedAt);
     if (idle < STALL_MS) return;
 
+    const input = openInputFile(proc.pid);
     console.error(`[ffmpeg] "${name}" wrote no segment for ${Math.round(idle / 1000)}s — killing it so it restarts`);
+    if (input) console.error(`[ffmpeg/${key}] it had open: ${path.basename(input)}`);
     try { proc.kill('SIGKILL'); } catch (_) {}
   }, 15_000);
 }
