@@ -44,7 +44,7 @@ if [ -n "$SIZE" ]; then
   VF="scale=w=$SIZE_W:h=$SIZE_H:force_original_aspect_ratio=decrease"
   VF="$VF,pad=$SIZE_W:$SIZE_H:(ow-iw)/2:(oh-ih)/2,setsar=1"
 else
-  VF="scale=-2:'min(720,ih)'"
+  VF="scale=-2:'min(720,ih)',setsar=1"
 fi
 # A source with broken timestamps (an old MPEG-4 rip, say) produces a variable
 # frame rate file that the live pipeline then fights every single packet.
@@ -121,7 +121,7 @@ for f in "${files[@]}"; do
       -map 0:v:0 -map '0:a:0?' -sn -dn \
       -c:v libx264 -crf "$CRF" -preset "$PRESET" -x264opts "threads=$ENC_THREADS" \
       -vf "$VF" -pix_fmt yuv420p \
-      -c:a aac -b:a 160k -ac 2 -movflags +faststart \
+      -c:a aac -b:a 160k -ac 2 -ar 48000 -movflags +faststart \
       -progress pipe:1 -nostats -f mp4 "$out.part" 2>>"$LOG" \
       | awk -v dur="${src_d:-0}" -v every="$PROGRESS_EVERY" 'BEGIN { nxt = every }
           /^out_time_us=/ {
