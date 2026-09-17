@@ -1163,6 +1163,31 @@ function logFfmpegLine(key, line) {
 // Consecutive-failure counts per channel, for restart backoff.
 const restartState = new Map();
 
+// A channel whose encoder hangs is invisible to the exit handler: the process
+// stays alive, burns CPU, and writes nothing, so nothing restarts it and the
+// channel is simply dead until someone notices. Watch the segment directory
+// itself rather than the fs.watch events, which inotify can drop.
+const STALL_MS = 90_000;   // ~22 segments' worth at hls_time 4
+
+function startStallWatchdog(key, name, hlsDir, startedAt, proc) {
+  return setInterval(() => {
+    let newest = 0;
+    try {
+      for (const f of fs.readdirSync(hlsDir)) {
+        if (!f.endsWith('.ts')) continue;
+        const { mtimeMs } = fs.statSync(path.join(hlsDir, f));
+        if (mtimeMs > newest) newest = mtimeMs;
+      }
+    } catch (_) { return; }        // directory gone: the exit path will handle it
+
+    const idle = Date.now() - (newest || startedAt);
+    if (idle < STALL_MS) return;
+
+    console.error(`[ffmpeg] "${name}" wrote no segment for ${Math.round(idle / 1000)}s — killing it so it restarts`);
+    try { proc.kill('SIGKILL'); } catch (_) {}
+  }, 15_000);
+}
+
 function launchFfmpeg(key, name, concatPath) {
   if (stoppedChannels.has(key)) return; // stop was requested, don't restart
   const binary = process.env.FFMPEG_PATH || ffmpegPath;
@@ -1205,6 +1230,7 @@ function launchFfmpeg(key, name, concatPath) {
     path.join(hlsDir, 'index.m3u8'),
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   const startedAt = Date.now();
+  const watchdog = startStallWatchdog(key, name, hlsDir, startedAt, proc);
   // ffmpeg's own throughput figure. The segment watcher below is built on
   // fs.watch, and inotify drops or coalesces events while delete_segments
   // churns the directory — two healthy 4s segments then look like one 8s
@@ -1272,10 +1298,12 @@ function launchFfmpeg(key, name, concatPath) {
   });
 
   proc.on('error', err => {
+    clearInterval(watchdog);
     console.error(`[ffmpeg] Failed to start "${name}":`, err.message);
     ffmpegProcesses.delete(key);
   });
   proc.on('exit', (code, signal) => {
+    clearInterval(watchdog);
     console.log(`[ffmpeg] "${name}" exited (code=${code} signal=${signal})`);
     if (code !== 0 && code !== null && recentStderr.length) {
       console.error(`[ffmpeg/${key}] last output before exit:`);
